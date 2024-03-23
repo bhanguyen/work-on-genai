@@ -1,4 +1,4 @@
-# AI-Powered Data Exploration
+# AI-Powered Data Exploratory Dat Analysis
 
 This project demonstrates how to use an AI model (Claude from Anthropic) to interact with data stored in an Amazon RDS instance or a local file (CSV, Parquet, or JSON) and present the results in a Streamlit interface.
 
