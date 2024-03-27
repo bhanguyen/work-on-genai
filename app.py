@@ -25,8 +25,11 @@ def run_query(conn, query):
 
 # Function to generate a response using the Claude AI model
 def get_response(client, prompt, data=None):
-    
-    prompt += f"\n\nHuman: {prompt}\n\nAssistant: \n\n"
+    if data is not None:
+        data_str = data.to_string()
+        prompt = f"{data_str}\n\nHuman: {prompt}\n\nAssistant:"
+    else:
+        prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
 
     response = client.completions.create(
         prompt=prompt,
@@ -38,16 +41,16 @@ def get_response(client, prompt, data=None):
 
 # Streamlit app
 def main():
-    st.title("AI-Powered Data Exploration")
+    st.sidebar.title("AI-Powered Exploratory Data Analysis")
     st.write("Welcome to the AI-Powered Data Exploration app! Please choose whether you want to explore a single file or data in a database.")
-    data_source = st.radio("Select data source", ["Single File", "Database"])
+    data_source = st.sidebar.radio("1. Select data source", ["Single File", "Database"])
 
     if data_source == "Single File":
         # User input for Anthropic API key
         # api_key = st.text_input("Anthropic API Key", DEFAULT_API_KEY, type="password")
 
         # User input for file upload
-        uploaded_file = st.file_uploader("Choose a file", type=["csv", "parquet", "json"])
+        uploaded_file = st.sidebar.file_uploader("Choose a file", type=["csv", "parquet", "json"])
 
         if uploaded_file is not None:
             # Read the uploaded file into a Pandas DataFrame
