@@ -39,24 +39,25 @@ then look at the results of the query and return the answer.
 The question: {question}
 """
     return_sql = st.checkbox("Return SQL Query", value=True)
-    if st.button("Get Answer"):
+    if st.button("Get Answer", type='secondary'):
         if question:
+            with st.spinner("Processing..."):
             # Checkbox to toggle return_sql
-            if return_sql:
-                chain = get_chain(CONNECTION_STRING, selected_table, return_sql)
-                response = chain.run(PROMPT.format(question=question))
-                st.header("SQL Query")
-                st.code(response, language='sql')
-                
-                result = pd.read_sql_query(response, conn)
-                conn.close()
-                st.write("Query executed successfully.")
-                st.dataframe(result, hide_index=True)
-            else:
-                chain = get_chain(CONNECTION_STRING, selected_table, return_sql)
-                response = chain.run(PROMPT.format(question=question))
-                st.header("Answer")
-                st.write(response)
+                if return_sql:
+                    chain = get_chain(CONNECTION_STRING, selected_table, return_sql)
+                    response = chain.run(PROMPT.format(question=question))
+                    st.header("SQL Query")
+                    st.code(response, language='sql')
+                    
+                    result = pd.read_sql_query(response, conn)
+                    conn.close()
+                    st.write("Query executed successfully.")
+                    st.dataframe(result, hide_index=True)
+                else:
+                    chain = get_chain(CONNECTION_STRING, selected_table, return_sql)
+                    response = chain.run(PROMPT.format(question=question))
+                    st.header("Answer")
+                    st.write(response)
 
     # mod_response = st.text_input("Enter your modified sql")
     # st.code(mod_response, language='sql')
