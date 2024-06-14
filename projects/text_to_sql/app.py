@@ -6,6 +6,8 @@ import pandas as pd
 from utils import connect_to_db, get_tables, load_table
 from get_sql_answer import get_chain, get_agent
 
+from langchain.callbacks import StreamlitCallbackHandler
+
 # TODO: Streamlit app
 def main():
     st.set_page_config(
@@ -38,40 +40,48 @@ Given an input question, first create a syntactically correct postgresql query t
 then look at the results of the query and return the answer.  
 The question: {question}
 """
-    return_sql = st.checkbox("Return SQL Query", value=True)
+    agent = st.checkbox("Use Agent?")
+    if agent is False:
+        return_sql = st.checkbox("Return SQL Query", value=True)
+
     if st.button("Get Answer", type='secondary'):
         if question:
-            with st.spinner("Processing..."):
-            # Checkbox to toggle return_sql
+            if agent is False:
+                chain = get_chain(CONNECTION_STRING, selected_table)
+                # Checkbox to toggle return_sql
                 if return_sql:
-                    chain = get_chain(CONNECTION_STRING, selected_table, return_sql)
+                    chain.return_sql = True
                     response = chain.run(PROMPT.format(question=question))
                     st.header("SQL Query")
                     st.code(response, language='sql')
                     
-                    result = pd.read_sql_query(response, conn)
-                    conn.close()
-                    st.write("Query executed successfully.")
-                    st.dataframe(result, hide_index=True)
+                    try:
+                        with st.spinner("Executing query..."):
+                            result = pd.read_sql_query(response, conn)
+                        st.success("Query executed successfully.")
+                        st.dataframe(result, hide_index=True)
+                    finally:
+                        if conn is not None:
+                            conn.close()
+                            st.info("Database connection closed.")
                 else:
-                    chain = get_chain(CONNECTION_STRING, selected_table, return_sql)
+                    chain.return_sql=False
                     response = chain.run(PROMPT.format(question=question))
                     st.header("Answer")
                     st.write(response)
+            else:
+                # Create a dedicated container for the callback
+                callback_container = st.container()
+                # Initialize the StreamlitCallbackHandler with the container
+                st_cb = StreamlitCallbackHandler(
+                    callback_container, 
+                    expand_new_thoughts=False,
+                )
+                agent = get_agent(CONNECTION_STRING, selected_table)
+                result = agent.run(question, callbacks=[st_cb])
+                st.success(result)
 
-    # mod_response = st.text_input("Enter your modified sql")
-    # st.code(mod_response, language='sql')
-    
-    # if st.button("Execute"):
-    #     conn = connect_to_db()
-    #     new_result = pd.read_sql_query(mod_response, conn)
-    #     conn.close()
-    #     if isinstance(new_result, pd.DataFrame):
-    #         st.write("Query executed successfully.")
-    #         st.dataframe(new_result)
-    #     else:
-    #         st.write("Error executing query:")
-    #         st.write(new_result)
+
     
     with st.sidebar:
         st.divider()
@@ -91,8 +101,9 @@ if __name__ in '__main__':
     host = os.environ.get("DB_HOST")                                          
     user = os.environ.get("DB_USER")                                      
     password = os.environ.get("DB_PASSWORD")
-    database = os.environ.get("DB_DATABASE")                               
+    database = os.environ.get("DB_DATABASE")
+    port = os.environ.get("DB_PORT")                               
 
-    CONNECTION_STRING = f"postgresql+psycopg2://{user}:{password}@{host}:5432/{database}"
+    CONNECTION_STRING = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
     
     main()

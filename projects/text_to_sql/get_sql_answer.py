@@ -24,7 +24,7 @@ def get_db(CONNECTION_STRING, table):
 
     return db
 
-def get_chain(CONNECTION_STRING, table, return_sql):
+def get_chain(CONNECTION_STRING, table):
     # TODO: Start LLM
     llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
 
@@ -33,19 +33,9 @@ def get_chain(CONNECTION_STRING, table, return_sql):
         llm=llm,
         db=get_db(CONNECTION_STRING, table),
         top_k=10,
-        # verbose=True,
-        return_sql=return_sql,
+        verbose=True,
         use_query_checker=True,
     )
-
-    # chain = SQLDatabaseSequentialChain.from_llm(
-    #     llm=llm,
-    #     db=get_db(CONNECTION_STRING, table),
-    #     top_k=10,
-    #     verbose=True,
-    #     return_sql=return_sql,
-    #     use_query_checker=True,
-    # )
 
     return chain
 
@@ -78,8 +68,8 @@ def get_agent(CONNECTION_STRING, table):
     Do NOT skip this step.
     Then you should query the schema of the most relevant tables."""
 
-    # Message for priming AI behavior
-    system_message = SystemMessage(content=SQL_PREFIX)
+    # # Message for priming AI behavior
+    # system_message = SystemMessage(content=SQL_PREFIX)
 
     # agent_executor = chat_agent_executor.create_tool_calling_executor(
     #     llm, tools, messages_modifier=system_message
@@ -95,6 +85,7 @@ def get_agent(CONNECTION_STRING, table):
         llm=llm, 
         toolkit=toolkit,
         agent_type="tool-calling",
+        prefix=SQL_PREFIX,
         verbose=True,
         )
     

@@ -12,7 +12,8 @@ def connect_to_db():
         password = os.environ.get("DB_PASSWORD"),                                  
         host = os.environ.get("DB_HOST"),                                            
         port = os.environ.get("DB_PORT"),                                          
-        database = os.environ.get("DB_DATABASE"))
+        database = os.environ.get("DB_DATABASE")
+    )
 
     return conn
 
@@ -30,7 +31,6 @@ def load_table(table_name, connection_params):
         conn = connection_params
         query = f'SELECT * FROM {table_name} LIMIT 5'
         df = pd.read_sql_query(query, conn)
-        conn.close()
         return df
     except Exception as e:
         return str(e)
