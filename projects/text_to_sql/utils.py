@@ -2,17 +2,18 @@ import os
 import psycopg2
 from dotenv import load_dotenv
 import pandas as pd
+from sqlalchemy import create_engine
 
 load_dotenv()
 # TODO: Function to connect to database
 # Set up the connection to PostgreSQL
-def connect_to_db():
+def connect_to_db(database):
     conn = psycopg2.connect(
         user = os.environ.get("DB_USER"),                                     
         password = os.environ.get("DB_PASSWORD"),                                  
         host = os.environ.get("DB_HOST"),                                            
         port = os.environ.get("DB_PORT"),                                          
-        database = os.environ.get("DB_DATABASE")
+        database = database  #os.environ.get("DATABASE")
     )
 
     return conn
