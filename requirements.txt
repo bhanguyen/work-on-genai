@@ -18,10 +18,10 @@ torch==2.2.2
 # torchaudio
 
 #LangChain
-langchain==0.1.14
-langchain-core==0.1.43
-langchain-community==0.0.31
-langchain-openai
+langchain
+langchain-core
+langchain-community
+langchain-openai==0.1.7
 langchain-chroma==0.1.0
 langchain-experimental
 # langserve[all]
@@ -34,7 +34,7 @@ PyPDF2
 llama-index
 
 #Hugging Face
-dataset
+# dataset
 huggingface-hub==0.22.2
 transformers==4.39.3
 sentence-transformers==2.6.1

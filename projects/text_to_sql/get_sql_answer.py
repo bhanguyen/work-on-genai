@@ -29,11 +29,12 @@ def get_chain(CONNECTION_STRING, **kwargs): # table):
     llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
 
     # TODO: Get chain
-    chain = SQLDatabaseChain.from_llm(
+    chain = SQLDatabaseSequentialChain.from_llm(
         llm=llm,
         db=get_db(CONNECTION_STRING), #, table),
         # top_k=10,
         verbose=True,
+        return_intermediate_steps=True,
         use_query_checker=True,
     )
 
@@ -87,6 +88,7 @@ def get_agent(CONNECTION_STRING, agent_type, **kwargs):
         agent_type=agent_type,  # Must be one of 'openai-tools', 'openai-functions', or 'zero-shot-react-description'
         prefix=SQL_PREFIX,
         verbose=True,
+        agent_executor_kwargs={"return_intermediate_steps": True}
         )
     
     return agent_executor

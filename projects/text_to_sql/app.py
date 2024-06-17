@@ -77,30 +77,38 @@ The question: {question}
                 if use_table:
                     table = selected_table
                     chain = get_chain(CONNECTION_STRING, include_tables=[table]) #, selected_table)
+                    print(f"Using {table}")
                 else:
                     chain = get_chain(CONNECTION_STRING)
+                    print('Do not use table')
 
                 # Checkbox to toggle return_sql
                 if return_sql:
-                    chain.return_sql = True
-                    response = chain.run(PROMPT.format(question=question))
-                    st.header("SQL Query")
-                    st.code(response, language='sql')
+                    pass
+                    # chain.return_sql = True
+                    # response = chain.run(PROMPT.format(question=question))
+                    # st.header("SQL Query")
+                    # st.code(response, language='sql')
                     
-                    try:
-                        with st.spinner("Executing query..."):
-                            result = pd.read_sql_query(response, conn)
-                        st.success("Query executed successfully.")
-                        st.dataframe(result, hide_index=True)
-                    finally:
-                        if conn is not None:
-                            conn.close()
-                            st.info("Database connection closed.")
+                    # try:
+                    #     with st.spinner("Executing query..."):
+                    #         result = pd.read_sql_query(response, conn)
+                    #     st.success("Query executed successfully.")
+                    #     st.dataframe(result, hide_index=True)
+                    # finally:
+                    #     if conn is not None:
+                    #         conn.close()
+                    #         st.info("Database connection closed.")
                 else:
-                    chain.return_sql=False
-                    response = chain.run(PROMPT.format(question=question))
+                    # chain.return_sql=False
+                    # response = chain.run(PROMPT.format(question=question))
+                    response = chain(PROMPT.format(question=question))
+
                     st.header("Answer")
-                    st.write(response)
+                    con = st.container(height=300, border=True)
+                    con.write(response)
+                    st.code(response['intermediate_steps'][1], 'sql')
+                    st.success(response['result'])
             else:
                 # Create a dedicated container for the callback
                 callback_container = st.container()
@@ -112,6 +120,8 @@ The question: {question}
                 agent = get_agent(CONNECTION_STRING, agent_type) #, selected_table)
                 result = agent.run(question, callbacks=[st_cb])
                 st.success(result)
+                # result_1 = agent.__call__(question)
+                # st.success(result_1)
     
     with st.sidebar:
         st.divider()
