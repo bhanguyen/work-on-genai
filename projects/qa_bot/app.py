@@ -47,7 +47,8 @@ def main():
     st.set_page_config(
         page_title="Streamlit Question Answering App",
         layout="wide",
-        page_icon=":books:")
+        page_icon=":books:"
+    )
     st.write(css, unsafe_allow_html=True)
 
     with st.sidebar:
