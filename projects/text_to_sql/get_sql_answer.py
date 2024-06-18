@@ -14,24 +14,24 @@ from langchain_core.messages import SystemMessage
 from langchain_core.messages import HumanMessage
 # from langgraph.prebuilt import chat_agent_executor
 
-def get_db(CONNECTION_STRING, **kwargs): #, table):
+def get_db(CONNECTION_STRING, table):
     # TODO: Get database connection
     db = SQLDatabase.from_uri(
         CONNECTION_STRING,
-        # include_tables=[table],
+        include_tables=[table],
         sample_rows_in_table_info=3
     )
 
     return db
 
-def get_chain(CONNECTION_STRING, **kwargs): # table):
+def get_chain(CONNECTION_STRING, table):
     # TODO: Start LLM
     llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
 
     # TODO: Get chain
     chain = SQLDatabaseSequentialChain.from_llm(
         llm=llm,
-        db=get_db(CONNECTION_STRING), #, table),
+        db=get_db(CONNECTION_STRING, table),
         # top_k=10,
         verbose=True,
         return_intermediate_steps=True,
@@ -40,7 +40,7 @@ def get_chain(CONNECTION_STRING, **kwargs): # table):
 
     return chain
 
-def get_agent(CONNECTION_STRING, agent_type, **kwargs):
+def get_agent(CONNECTION_STRING, agent_type):
 
     llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
 
@@ -50,7 +50,7 @@ def get_agent(CONNECTION_STRING, agent_type, **kwargs):
         sample_rows_in_table_info=3
     )
 
-    toolkit = SQLDatabaseToolkit(db=get_db(CONNECTION_STRING), llm=llm)
+    toolkit = SQLDatabaseToolkit(db=db, llm=llm)
     tools = toolkit.get_tools()
 
 

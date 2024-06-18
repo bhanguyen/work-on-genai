@@ -62,7 +62,7 @@ The question: {question}
 """
     agent = st.checkbox("Use Agent")
     if agent is False:
-        return_sql = st.checkbox("Return SQL", value=True)
+        # return_sql = st.checkbox("Return SQL", value=True)
         use_table = st.checkbox("Use Table", value=True)
     else:
         agent_type = st.selectbox(
@@ -76,39 +76,41 @@ The question: {question}
             if agent is False:
                 if use_table:
                     table = selected_table
-                    chain = get_chain(CONNECTION_STRING, include_tables=[table]) #, selected_table)
-                    print(f"Using {table}")
-                else:
-                    chain = get_chain(CONNECTION_STRING)
-                    print('Do not use table')
+                    chain = get_chain(CONNECTION_STRING, selected_table)
+                    st.write(f"Using {table}")
 
-                # Checkbox to toggle return_sql
-                if return_sql:
-                    pass
-                    # chain.return_sql = True
-                    # response = chain.run(PROMPT.format(question=question))
-                    # st.header("SQL Query")
-                    # st.code(response, language='sql')
-                    
-                    # try:
-                    #     with st.spinner("Executing query..."):
-                    #         result = pd.read_sql_query(response, conn)
-                    #     st.success("Query executed successfully.")
-                    #     st.dataframe(result, hide_index=True)
-                    # finally:
-                    #     if conn is not None:
-                    #         conn.close()
-                    #         st.info("Database connection closed.")
-                else:
-                    # chain.return_sql=False
-                    # response = chain.run(PROMPT.format(question=question))
-                    response = chain(PROMPT.format(question=question))
+                    tab1, tab2 = st.tabs(["Answer", "Chain logs"])
 
-                    st.header("Answer")
-                    con = st.container(height=300, border=True)
-                    con.write(response)
-                    st.code(response['intermediate_steps'][1], 'sql')
-                    st.success(response['result'])
+                    # Get response
+                    with st.spinner("Getting the answer..."):
+                        response = chain(PROMPT.format(question=question))
+
+                    with tab1:
+                        # st.header("Answer")
+                        st.success(response['result'])
+                        final_query = response['intermediate_steps'][1]
+                        st.subheader("Executed SQL")
+                        st.code(final_query, language='sql')
+                        
+                        st.subheader("Result Table")
+                        try:
+                            with st.spinner("Executing query..."):
+                                result = pd.read_sql_query(final_query, conn)
+                            st.success("Query executed successfully.")
+                            st.dataframe(result, hide_index=True)
+                        finally:
+                            if conn is not None:
+                                conn.close()
+                                st.info("Database connection closed.")
+                    with tab2:
+                        st.subheader("Chain logs")
+                        # container = st.container(height=300, border=True)
+                        # container.write(response)
+                        response
+
+                else:
+                    st.info("Only support single table for now")
+            
             else:
                 # Create a dedicated container for the callback
                 callback_container = st.container()
@@ -118,9 +120,9 @@ The question: {question}
                     expand_new_thoughts=False,
                 )
                 agent = get_agent(CONNECTION_STRING, agent_type) #, selected_table)
-                result = agent.run(question, callbacks=[st_cb])
-                st.success(result)
-                # result_1 = agent.__call__(question)
+                result = agent(question, callbacks=[st_cb])
+                st.success(result['input'])
+                # result_1 = agent.__call__(question, callbacks=[st_cb])
                 # st.success(result_1)
     
     with st.sidebar:
