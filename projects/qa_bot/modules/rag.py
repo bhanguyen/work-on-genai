@@ -4,6 +4,8 @@ from langchain.memory import ConversationSummaryBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 
+from langchain_community.chat_models import ChatOllama
+
 # TODO: Add a function to generate conversational chain with OpenAI API
 def get_conversation_chain(vectorstore):
 
@@ -37,12 +39,12 @@ def get_conversation_chain(vectorstore):
 
     # Step 3: Generate
     # Create a ChatOpenAI object with the OpenAI API key
-    llm = ChatOpenAI(
-        model_name="gpt-3.5-turbo",
-        temperature=0,
-        api_key=os.environ.get("OPENAI_API_KEY")
-    )
-
+    # llm = ChatOpenAI(
+    #     model_name="gpt-3.5-turbo",
+    #     temperature=0,
+    #     api_key=os.environ.get("OPENAI_API_KEY")
+    # )
+    llm = ChatOllama(model="llama3")
     memory = ConversationSummaryBufferMemory(
         llm=llm,
         memory_key='chat_history',

@@ -14,6 +14,8 @@ from langchain_core.messages import SystemMessage
 from langchain_core.messages import HumanMessage
 # from langgraph.prebuilt import chat_agent_executor
 
+from langchain_community.chat_models import ChatOllama
+
 def get_db(CONNECTION_STRING, table):
     # TODO: Get database connection
     db = SQLDatabase.from_uri(
@@ -24,13 +26,16 @@ def get_db(CONNECTION_STRING, table):
 
     return db
 
-def get_chain(CONNECTION_STRING, table):
-    # TODO: Start LLM
-    llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
+def get_llm():
+    # llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
+    llm = ChatOllama(model='phi3')
 
+    return llm
+
+def get_chain(CONNECTION_STRING, table):
     # TODO: Get chain
     chain = SQLDatabaseSequentialChain.from_llm(
-        llm=llm,
+        llm=get_llm(),
         db=get_db(CONNECTION_STRING, table),
         # top_k=10,
         verbose=True,
@@ -42,15 +47,13 @@ def get_chain(CONNECTION_STRING, table):
 
 def get_agent(CONNECTION_STRING, agent_type):
 
-    llm = ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"],temperature=0)
-
     db = SQLDatabase.from_uri(
         CONNECTION_STRING,
         # include_tables=[table],
         sample_rows_in_table_info=3
     )
 
-    toolkit = SQLDatabaseToolkit(db=db, llm=llm)
+    toolkit = SQLDatabaseToolkit(db=db, llm=get_llm())
     tools = toolkit.get_tools()
 
 
@@ -83,7 +86,7 @@ def get_agent(CONNECTION_STRING, agent_type):
     #     print("----")
 
     agent_executor = create_sql_agent(
-        llm=llm, 
+        llm=get_llm(), 
         toolkit=toolkit,
         agent_type=agent_type,  # Must be one of 'openai-tools', 'openai-functions', or 'zero-shot-react-description'
         prefix=SQL_PREFIX,
