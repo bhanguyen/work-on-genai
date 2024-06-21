@@ -1,7 +1,7 @@
 import os
 from langchain_community.vectorstores.pgvector import PGVector
-from langchain_openai import OpenAIEmbeddings
 
+from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
 
 # TODO: Add a function to create a vector store, and create embeddings

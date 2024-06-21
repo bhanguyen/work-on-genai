@@ -6,8 +6,27 @@ from langchain.prompts import PromptTemplate
 
 from langchain_community.chat_models import ChatOllama
 
+import streamlit as st
+
+# Define a function to initialize the chat model
+def initialize_chat_model(model):
+    try:
+        if model == 'OpenAI':
+            llm = ChatOpenAI(
+                model_name='gpt-3.5-turbo',
+                temperature=0,
+                # api_key=os.environ.get('OPENAI_API_KEY')
+            )
+            print(os.environ.get('OPENAI_API_KEY'))
+        elif model == 'Ollama':
+            llm = ChatOllama(model='phi3', format='json')
+    except Exception as e:
+        st.warning(f"Error initializing model {model}: {str(e)}")
+        llm = None
+    return llm
+    
 # TODO: Add a function to generate conversational chain with OpenAI API
-def get_conversation_chain(vectorstore):
+def get_conversation_chain(vectorstore, model):
 
     # Step 1: Define retriever
     retriever = vectorstore.as_retriever(
@@ -22,7 +41,8 @@ def get_conversation_chain(vectorstore):
     In your answers, always use a professional tone.
     Simply answer the question clearly and with lots of detail using only the relevant details from the information below. 
     If the context does not contain the answer, say "Sorry, I didn't understand that. Could you rephrase your question?"
-        
+    Use three sentences maximum and keep the answer concise.
+
     Now read this context below and answer the question at the bottom.
     
     Context: {context}
@@ -39,22 +59,32 @@ def get_conversation_chain(vectorstore):
 
     # Step 3: Generate
     # Create a ChatOpenAI object with the OpenAI API key
-    # llm = ChatOpenAI(
-    #     model_name="gpt-3.5-turbo",
-    #     temperature=0,
-    #     api_key=os.environ.get("OPENAI_API_KEY")
+    llm = initialize_chat_model(model)
+    
+    if llm is None:
+        raise ValueError(f"Failed to initialize the model: {model}")
+    
+    # Using normal retrieval chain
+    # conversation_chain = ConversationalRetrievalChain.from_llm(
+    #     llm=llm,
+    #     chain_type='stuff',
+    #     combine_docs_chain_kwargs={'prompt': PROMPT},
+    #     retriever=retriever,
+    #     # get_chat_history=None,
+    #     # return_source_documents=True,
     # )
-    llm = ChatOllama(model="llama3")
+
+    # Using memory
     memory = ConversationSummaryBufferMemory(
         llm=llm,
         memory_key='chat_history',
         return_messages=True,
-        ai_prefix="Assistant",
+        ai_prefix='Assistant',
         output_key='answer')
     
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
-        chain_type="stuff",
+        chain_type='stuff',
         combine_docs_chain_kwargs={'prompt': PROMPT},
         retriever=retriever,
         get_chat_history=lambda h : h,
@@ -63,6 +93,3 @@ def get_conversation_chain(vectorstore):
     )
     
     return conversation_chain.invoke
-
-def format_docs(docs):
-        return "\n\n".join(doc.page_content for doc in docs )
