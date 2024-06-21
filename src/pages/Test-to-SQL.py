@@ -110,8 +110,6 @@ The question: {question}
                                 st.info("Database connection closed.")
                     with tab2:
                         st.subheader("Chain logs")
-                        # container = st.container(height=300, border=True)
-                        # container.write(response)
                         response
 
                 else:

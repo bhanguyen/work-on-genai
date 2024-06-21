@@ -85,14 +85,19 @@ def get_agent(CONNECTION_STRING, agent_type):
     #     print(s)
     #     print("----")
 
-    agent_executor = create_sql_agent(
-        llm=get_llm(), 
-        toolkit=toolkit,
-        agent_type=agent_type,  # Must be one of 'openai-tools', 'openai-functions', or 'zero-shot-react-description'
-        prefix=SQL_PREFIX,
-        verbose=True,
-        agent_executor_kwargs={"return_intermediate_steps": True}
+    # Create the SQL agent with additional debugging
+    try:
+        agent_executor = create_sql_agent(
+            llm=get_llm(), 
+            toolkit=toolkit,
+            agent_type=agent_type,  # Must be one of 'openai-tools', 'openai-functions', or 'zero-shot-react-description'
+            prefix=SQL_PREFIX,
+            verbose=True,
+            agent_executor_kwargs={"return_intermediate_steps": True},
+            handle_parsing_errors=True
         )
+    except ValueError as e:
+        print("Error creating SQL agent:", e)
     
     return agent_executor
 
