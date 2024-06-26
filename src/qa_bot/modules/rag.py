@@ -19,7 +19,7 @@ def initialize_chat_model(model):
             )
             print(os.environ.get('OPENAI_API_KEY'))
         elif model == 'Ollama':
-            llm = ChatOllama(model='phi3', format='json')
+            llm = ChatOllama(model='phi3')
     except Exception as e:
         st.warning(f"Error initializing model {model}: {str(e)}")
         llm = None

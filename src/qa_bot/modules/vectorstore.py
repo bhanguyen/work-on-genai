@@ -24,7 +24,7 @@ def get_vectorstore(text_chunks, CONNECTION_STRING, collection_name=None):
     
     # Define embeddings model
     # embeddings = OpenAIEmbeddings(api_key=os.environ.get("OPENAI_API_KEY"))
-    embeddings = HuggingFaceEmbeddings()
+    embeddings = HuggingFaceEmbeddings()  #model_name="all-MiniLM-L6-v2")
     
     # Assign "langchain" for collection name if not provided
     if not collection_name:

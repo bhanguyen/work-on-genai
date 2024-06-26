@@ -22,6 +22,7 @@ langchain
 langchain-core
 langchain-community
 langchain-openai==0.1.7
+langchain-anthropic
 langchain-chroma==0.1.0
 langchain-experimental
 # langserve[all]
