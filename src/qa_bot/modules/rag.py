@@ -64,16 +64,6 @@ def get_conversation_chain(vectorstore, model):
     if llm is None:
         raise ValueError(f"Failed to initialize the model: {model}")
     
-    # Using normal retrieval chain
-    # conversation_chain = ConversationalRetrievalChain.from_llm(
-    #     llm=llm,
-    #     chain_type='stuff',
-    #     combine_docs_chain_kwargs={'prompt': PROMPT},
-    #     retriever=retriever,
-    #     # get_chat_history=None,
-    #     # return_source_documents=True,
-    # )
-
     # Using memory
     memory = ConversationSummaryBufferMemory(
         llm=llm,
@@ -82,6 +72,7 @@ def get_conversation_chain(vectorstore, model):
         ai_prefix='Assistant',
         output_key='answer')
     
+    # Get conversational chain
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         chain_type='stuff',
@@ -90,6 +81,7 @@ def get_conversation_chain(vectorstore, model):
         get_chat_history=lambda h : h,
         memory=memory,
         return_source_documents=True,
+        verbose=True
     )
     
     return conversation_chain.invoke
