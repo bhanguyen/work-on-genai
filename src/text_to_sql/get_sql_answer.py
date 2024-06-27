@@ -9,8 +9,6 @@ from langchain.prompts import PromptTemplate
 from langchain_community.agent_toolkits import create_sql_agent
 from langchain.agents import AgentType
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
-# from langchain_core.messages import SystemMessage, HumanMessage
-# from langgraph.prebuilt import chat_agent_executor
 
 # Constants
 SQL_PREFIX = """You are an agent designed to interact with a SQL database.
@@ -80,7 +78,10 @@ def get_llm(provider='ollama'):
         llm = get_llm('openai')
     """
     if provider == 'openai':
-        return ChatOpenAI(api_key=os.environ["OPENAI_API_KEY"], temperature=0)
+        return ChatOpenAI(
+            api_key=os.environ["OPENAI_API_KEY"], 
+            temperature=0
+        )
     elif provider == 'anthropic':
         return ChatAnthropic(
             model="claude-3-5-sonnet-20240620",
@@ -88,7 +89,7 @@ def get_llm(provider='ollama'):
             api_key=os.environ["ANTHROPIC_API_KEY"]
         )
     elif provider == 'ollama':
-        return ChatOllama(model='phi3')
+        return ChatOllama(model='llama3')
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
 
