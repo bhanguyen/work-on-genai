@@ -1,32 +1,69 @@
 import os
-from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationSummaryBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 
-from langchain_community.chat_models import ChatOllama
+from langchain_community.chat_models import ChatOllama, ChatOpenAI, ChatAnthropic
 
 import streamlit as st
 
-# Define a function to initialize the chat model
-def initialize_chat_model(model):
+def initialize_chat_model(model_type: str, model: str):
+    """
+    Initialize and return a chat model based on the specified type and model name.
+
+    Args:
+        model_type (str): The type of model to initialize ('OpenAI', 'Ollama', or 'Anthropic').
+        model (str): The specific model name to use.
+
+    Returns:
+        object: An initialized chat model object, or None if initialization fails.
+
+    Raises:
+        Exception: If there's an error during model initialization.
+    """
     try:
-        if model == 'OpenAI':
+        if model_type == 'OpenAI':
+            # Initialize OpenAI chat model
             llm = ChatOpenAI(
-                model_name='gpt-3.5-turbo',
-                temperature=0,
-                # api_key=os.environ.get('OPENAI_API_KEY')
+                model_name=model,
+                temperature=0,  # Set to 0 for more deterministic outputs
             )
-            print(os.environ.get('OPENAI_API_KEY'))
-        elif model == 'Ollama':
-            llm = ChatOllama(model='phi3')
+        elif model_type == 'Ollama':
+            # Initialize Ollama chat model
+            llm = ChatOllama(model=model)
+        elif model_type == 'Anthropic':
+            # Initialize Anthropic (Claude) chat model
+            llm = ChatAnthropic(
+                model=model,
+                temperature=0,  # Set to 0 for more deterministic outputs
+            )
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
+        
+        return llm
     except Exception as e:
-        st.warning(f"Error initializing model {model}: {str(e)}")
-        llm = None
-    return llm
-    
-# TODO: Add a function to generate conversational chain with OpenAI API
-def get_conversation_chain(vectorstore, model):
+        # Log the error and return None if initialization fails
+        st.warning(f"Error initializing {model_type} model {model}: {str(e)}")
+        return None
+
+def get_conversation_chain(vectorstore, model_type: str, model: str):
+    """
+    Generate and return a conversational chain for question answering.
+
+    This function sets up a retrieval-based question answering system using the specified
+    vector store and language model.
+
+    Args:
+        vectorstore (object): The vector store containing the document embeddings.
+        model_type (str): The type of language model to use ('OpenAI', 'Ollama', or 'Anthropic').
+        model (str): The specific model name to use.
+
+    Returns:
+        function: An invocable function that runs the conversation chain.
+
+    Raises:
+        ValueError: If the language model initialization fails.
+    """
 
     # Step 1: Define retriever
     retriever = vectorstore.as_retriever(
@@ -34,7 +71,7 @@ def get_conversation_chain(vectorstore, model):
         search_kwargs={"k": 1, "include_metadata": True}
     )
 
-    # Step 2: Augment
+    # Step 2: Define the prompt template
     prompt_template = """
     You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
     Always use English as the language in your responses.
@@ -51,37 +88,38 @@ def get_conversation_chain(vectorstore, model):
     
     Answer:
     """
-    # Use bullet-points and provide as much detail as possible in your answer. 
     PROMPT = PromptTemplate(
             template=prompt_template, 
             input_variables=["context", "question"]
     )
 
-    # Step 3: Generate
-    # Create a ChatOpenAI object with the OpenAI API key
-    llm = initialize_chat_model(model)
+    # Step 3: Initialize the language model
+    llm = initialize_chat_model(model_type, model)
     
     if llm is None:
-        raise ValueError(f"Failed to initialize the model: {model}")
+        raise ValueError(f"Failed to initialize the model: {model_type} - {model}")
     
-    # Using memory
+    # Step 4: Set up conversation memory
     memory = ConversationSummaryBufferMemory(
         llm=llm,
         memory_key='chat_history',
         return_messages=True,
         ai_prefix='Assistant',
-        output_key='answer')
+        output_key='answer'
+    )
     
-    # Get conversational chain
+    # Step 5: Create the conversational retrieval chain
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
-        chain_type='stuff',
+        chain_type='stuff',  # 'stuff' method: stuff all retrieved documents into the prompt
         combine_docs_chain_kwargs={'prompt': PROMPT},
         retriever=retriever,
+        # To get chat history as it is
+        # To limit the history to 5 get_chat_history=lambda h : h[-5:]
         get_chat_history=lambda h : h,
         memory=memory,
         return_source_documents=True,
-        verbose=True
+        verbose=True  # Set to True for detailed logging
     )
     
     return conversation_chain.invoke

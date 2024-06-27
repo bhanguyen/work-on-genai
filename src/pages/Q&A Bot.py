@@ -42,9 +42,9 @@ def handle_userinput(user_question):
                 "{{MSG}}", message.content), unsafe_allow_html=True)
 
 # Define a function to initialize the session state
-def initialize_session_state(vectorstore, model):
+def initialize_session_state(vectorstore, model_type, model):
     if "conversation" not in st.session_state:
-        st.session_state.conversation = get_conversation_chain(vectorstore, model)
+        st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
@@ -73,8 +73,15 @@ def main():
 
         collection_name = st.text_input("Enter your collection name (Optional)")
         
-        # Model selection
-        model = st.selectbox('Select model', ['OpenAI', 'Ollama'])
+        # Updated model selection
+        model_type = st.selectbox('Select model type', ['OpenAI', 'Ollama', 'Anthropic'])
+        
+        if model_type == 'OpenAI':
+            model = 'gpt-3.5-turbo'
+        elif model_type == 'Ollama':
+            model = st.selectbox('Select Ollama model', ['phi3', 'llama3', 'mistral'])
+        elif model_type == 'Anthropic':
+            model = 'claude-3-sonnet-20240229'
         
         # If the user clicks the "Process" button, the following code is executed:
         # i. raw_text = get_pdf_text(pdf_docs): retrieves the text content from the uploaded PDF documents.
@@ -95,27 +102,29 @@ def main():
                     )
 
                     # create conversation chain
-                    st.session_state.conversation = get_conversation_chain(vectorstore, model)
+                    st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
                     st.success('PDF uploaded successfully!', icon="✅")
                 except Exception as e:
                     st.error(f"Error processing PDFs: {str(e)}")
 
     # A header with the text appears at the top of the Streamlit application.
     st.header("GenAI Q&A with pgvector, AWS Aurora Postgres, and Langchain :books::parrot:")    
-    st.markdown(f"Ask a question about your documents with __{model}__:")
-    
+    st.markdown(f"Ask a question about your documents with __{model_type} - {model}__:")    
     # Create a text input box where you can ask questions about your documents.
     user_question = st.chat_input(placeholder="Ask me something")
     
     # Select chat model
     vectorstore = get_vectorstore(None, CONNECTION_STRING)
     try:
-        initialize_session_state(vectorstore, model)
-    except:
-        if model == 'OpenAI':
-            st.warning(st.warning('Missing OpenAI key'))
-        else:
-            st.warning('Make sure you initial Ollama')
+        initialize_session_state(vectorstore, model_type, model)
+    except Exception as e:
+        if model_type == 'OpenAI':
+            st.warning('Missing OpenAI key')
+        elif model_type == 'Ollama':
+            st.warning('Make sure you initialized Ollama')
+        elif model_type == 'Anthropic':
+            st.warning('Missing Anthropic API key')
+        st.error(f"Error: {str(e)}")
 
     
     # If the user enters a question, it calls the handle_userinput() function to process the user's input.
