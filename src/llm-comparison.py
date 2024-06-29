@@ -5,18 +5,19 @@ The app allows users to select different Ollama models and visualizes the genera
 """
 
 import streamlit as st
+import os
+from dotenv import load_dotenv
+
 from langchain_community.chat_models import ChatOpenAI, ChatOllama
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableSequence
 from langchain.callbacks import StreamlitCallbackHandler
 from langchain_community.vectorstores import PGVector
+from langchain_community.vectorstores.pgvector import PGVector
 import anthropic
-import os
-from dotenv import load_dotenv
 
 # Import custom vectorstore module
-from qa_bot.modules.vectorstore import get_vectorstore
-from langchain_community.vectorstores.pgvector import PGVector
+from applications.qa_bot.modules.vectorstore import get_vectorstore
 
 # Load environment variables
 load_dotenv()
@@ -52,22 +53,23 @@ def get_relevant_context(query: str, top_k: int = 3) -> str:
     docs = vectorstore.similarity_search(query, k=top_k)
     return "\n\n".join([doc.page_content for doc in docs])
 
+# Set temperature 
+temperature = st.sidebar.slider("Temperature", min_value=0.0, max_value=1.0, value=0.5, step=0.01)
+
 # Set up Langchain components
 prompt_template = ChatPromptTemplate.from_template("Context: {context}\n\nQuestion: {question}\n\nAnswer:")
 
-# Initialize LLMs
-openai_llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key)
-anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key)
-
-# Create RunnableSequence for OpenAI
+# Initialize OpenAI model
+openai_llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=temperature)
 openai_chain = RunnableSequence(prompt_template | openai_llm)
 
 # Function to get Claude 3.5 Sonnet response
 def get_claude_response(context: str, question: str) -> str:
+    anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key)
     message = anthropic_client.messages.create(
         model="claude-3-5-sonnet-20240620",
         max_tokens=1000,
-        temperature=0,
+        temperature=temperature,
         system="You are a helpful AI assistant. Use the provided context to answer the user's question.",
         messages=[
             {"role": "user", "content": f"Context: {context}\n\nQuestion: {question}"}
@@ -76,19 +78,20 @@ def get_claude_response(context: str, question: str) -> str:
     return message.content[0].text
 
 # Streamlit UI setup
-st.set_page_config(layout='wide')
+
 st.title("LLM Response Comparison")
+st.write("This application compare the responses between different LLM including phi3, llama3, mistral, openai, anthropic")
 
 # Ollama model selection in the sidebar
 ollama_models = ["phi3", "llama3", "mistral"]
 selected_ollama_model = st.sidebar.selectbox("Select Ollama Model", ollama_models)
 
 # Initialize Ollama LLM with the selected model
-ollama_llm = ChatOllama(model=selected_ollama_model)
+ollama_llm = ChatOllama(model=selected_ollama_model, temperature=temperature)
 ollama_chain = RunnableSequence(prompt_template | ollama_llm)
 
 # Main input area for user prompt
-user_prompt = st.text_area("Enter your prompt:", height=100)
+user_prompt = st.text_area("Enter your prompt:")
 
 if st.button("Generate Responses"):
     if user_prompt:

@@ -7,11 +7,40 @@ from langchain_community.utilities import SQLDatabase
 from langchain_experimental.sql import SQLDatabaseChain, SQLDatabaseSequentialChain
 from langchain.prompts import PromptTemplate
 from langchain_community.agent_toolkits import create_sql_agent
-from langchain.agents import AgentType
+from langchain.agents import AgentType, AgentExecutor
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain.agents.agent import AgentOutputParser
+from langchain.schema import AgentAction, AgentFinish
+from langchain.callbacks.base import BaseCallbackHandler
+from typing import Union, Dict, Any
+import re
+
+class FlexibleOutputParser(AgentOutputParser):
+    def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
+        if "Final Answer:" in text:
+            return AgentFinish(
+                return_values={"output": text.split("Final Answer:")[-1].strip()},
+                log=text,
+            )
+        
+        # Check for thought-action pattern
+        match = re.search(r"Thought:(.+?)Action:(.+?)(?:\n|$)", text, re.DOTALL)
+        if match:
+            thought = match.group(1).strip()
+            action = match.group(2).strip()
+            
+            # Extract action input if present
+            action_input_match = re.search(r"Action Input:(.+?)(?:\n|$)", text[match.end():], re.DOTALL)
+            action_input = action_input_match.group(1).strip() if action_input_match else ""
+            
+            return AgentAction(tool=action, tool_input=action_input, log=thought)
+        
+        # If no clear pattern is found, treat the whole text as a thought
+        return AgentAction(tool="human", tool_input="Unclear output. Please clarify your next step.", log=text)
 
 # Constants
-SQL_PREFIX = """You are an agent designed to interact with a SQL database.
+SQL_PREFIX = """
+You are an agent designed to interact with a SQL database.
 Given an input question, create a syntactically correct PostgreSQL query to run, then look at the results of the query and return the answer.
 Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
 You can order the results by a relevant column to return the most interesting examples in the database.
@@ -23,8 +52,19 @@ You MUST double check your query before executing it. If you get an error while 
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
 
 To start you should ALWAYS look at the tables in the database to see what you can query.
-Do NOT skip this step.
-Then you should query the schema of the most relevant tables."""
+DO NOT skip this step.
+Then you should query the schema of the most relevant tables.
+
+DO NOT MAKE UP AN ANSWER OR USE PRIOR KNOWLEDGE, ONLY USE THE RESULTS OF THE CALCULATIONS YOU HAVE DONE.
+If the question does not seem related to the database, just return "I don't know" as the answer.
+ALWAYS, as part of your final answer, explain how you got to the answer on a section that starts with: 
+"Explanation:". Include the SQL query as part of the explanation section.
+
+Only use the below tools. Only use the information returned by the below tools to construct your query and final answer.
+DO NOT make up table names, only use the tables returned by any of the tools below.
+
+## Tools: 
+"""
 
 def get_db(connection_string, tables=None):
     """
@@ -57,16 +97,17 @@ def get_db(connection_string, tables=None):
 
     return SQLDatabase.from_uri(connection_string, **db_kwargs)
 
-def get_llm(provider='ollama'):
+def get_llm(provider, model):
     """
-    Create and return a language model based on the specified provider.
+    Create and return a language model based on the specified provider and model.
 
-    This function initializes and returns a language model object based on the chosen provider.
+    This function initializes and returns a language model object based on the chosen provider and model.
     It supports OpenAI, Anthropic, and Ollama models.
 
     Args:
         provider (str): The provider of the language model. 
-                        Options: 'openai', 'anthropic', 'ollama'. Defaults to 'ollama'.
+                        Options: 'OpenAI', 'Anthropic', 'Ollama'.
+        model (str): The specific model to use for the chosen provider.
 
     Returns:
         object: An instance of the specified language model.
@@ -75,21 +116,22 @@ def get_llm(provider='ollama'):
         ValueError: If an unsupported LLM provider is specified.
 
     Example:
-        llm = get_llm('openai')
+        llm = get_llm('OpenAI', 'gpt-3.5-turbo')
     """
-    if provider == 'openai':
+    if provider == 'OpenAI':
         return ChatOpenAI(
+            model=model,
             api_key=os.environ["OPENAI_API_KEY"], 
             temperature=0
         )
-    elif provider == 'anthropic':
+    elif provider == 'Anthropic':
         return ChatAnthropic(
-            model="claude-3-5-sonnet-20240620",
+            model=model,
             temperature=0,
             api_key=os.environ["ANTHROPIC_API_KEY"]
         )
-    elif provider == 'ollama':
-        return ChatOllama(model='llama3')
+    elif provider == 'Ollama':
+        return ChatOllama(model=model)
     else:
         raise ValueError(f"Unsupported LLM provider: {provider}")
 
@@ -103,55 +145,68 @@ def get_chain(connection_string, table, llm):
     Args:
         connection_string (str): The connection string for the database.
         table (str): The name of the table to query.
-        llm_provider (str): The provider for the language model. Defaults to 'ollama'.
+        llm: The language model instance.
 
     Returns:
         SQLDatabaseSequentialChain: A chain object for processing SQL queries.
 
     Example:
-        chain = get_chain("postgresql://user:password@localhost/dbname", "users", "openai")
+        llm = get_llm("OpenAI", "gpt-3.5-turbo")
+        chain = get_chain("postgresql://user:password@localhost/dbname", "users", llm)
     """
     db = get_db(connection_string, table)
-    return SQLDatabaseSequentialChain.from_llm(
+    return SQLDatabaseChain.from_llm(
         llm=llm,
         db=db,
+        # prefix=SQL_PREFIX,
         verbose=True,  # For detailed output
-        return_intermediate_steps=True,  # To see intermediate steps
+        return_sql=True,
+        # return_intermediate_steps=True,  # To see intermediate steps
         use_query_checker=True,  # To check and potentially correct SQL queries
     )
 
 def get_agent(connection_string, agent_type, table, llm):
     """
-    Create and return a SQL agent.
+    Create and return a SQL agent with enhanced error handling and SQL query extraction.
 
     This function creates an agent capable of interacting with a SQL database,
-    understanding natural language queries, and returning results.
+    understanding natural language queries, and returning results. It includes
+    additional error handling, a flexible output parser, and SQL query extraction.
 
     Args:
         connection_string (str): The connection string for the database.
         agent_type (AgentType): The type of agent to create.
-        llm_provider (str): The provider for the language model. Defaults to 'ollama'.
+        table (str): The name of the table to query.
+        llm: The language model instance.
 
     Returns:
-        AgentExecutor or None: An agent executor if successful, None if creation fails.
+        tuple: (AgentExecutor, SQLQueryExtractor) if successful, (None, None) if creation fails.
 
     Example:
+        llm = get_llm("OpenAI", "gpt-3.5-turbo")
         agent = get_agent("postgresql://user:password@localhost/dbname", 
-                          AgentType.ZERO_SHOT_REACT_DESCRIPTION, "anthropic")
+                                           AgentType.ZERO_SHOT_REACT_DESCRIPTION, "users", llm)
     """
     db = get_db(connection_string, table)
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
 
     try:
-        return create_sql_agent(
+        agent = create_sql_agent(
             llm=llm,
             toolkit=toolkit,
             agent_type=agent_type,
             prefix=SQL_PREFIX,
-            verbose=True,  # For detailed output
-            agent_executor_kwargs={"return_intermediate_steps": True},
-            handle_parsing_errors=True  # To handle parsing errors
+            verbose=True,
+            handle_parsing_errors=True,
+            agent_executor_kwargs={
+                "return_intermediate_steps": True,
+                "handle_parsing_errors":True
+            },
+            agent_kwargs={
+                "output_parser": FlexibleOutputParser(),
+            }
         )
+        return agent
     except ValueError as e:
         print(f"Error creating SQL agent: {e}")
-        return None
+        return None, None
