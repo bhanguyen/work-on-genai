@@ -10,7 +10,7 @@ from applications.qa_bot.modules.rag import get_conversation_chain
 from applications.qa_bot.htmlTemplates import css, bot_template, user_template
 
 # TODO: Add a function to handle user input
-def handle_userinput(user_question, doc):
+def handle_userinput(user_question):
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
     
@@ -39,8 +39,6 @@ def handle_userinput(user_question, doc):
         else:
             st.write(bot_template.replace(
                 "{{MSG}}", message.content), unsafe_allow_html=True)
-            with st.expander("See retrieved documents"):
-                st.write(doc)
 
 # Define a function to initialize the session state
 def initialize_session_state(vectorstore, model_type, model):
@@ -125,7 +123,6 @@ def main():
     st.markdown(f"Ask a question about your documents with __{model_type} - {model}__:")    
     # Create a text input box where you can ask questions about your documents.
     user_question = st.chat_input(placeholder="Ask me something")
-    
     # Select chat model
     vectorstore = get_vectorstore(None, CONNECTION_STRING)
     try:
@@ -139,13 +136,15 @@ def main():
             st.warning('Missing Anthropic API key')
         st.error(f"Error: {str(e)}")
 
-    
+
     # If the user enters a question, it calls the handle_userinput() function to process the user's input.
     if user_question:
         with st.spinner("Processing..."):
-            doc = vectorstore.similarity_search(user_question, k=1)
-            doc = doc[0].page_content
-            handle_userinput(user_question, doc)
+            handle_userinput(user_question)
+        with st.expander("See retrieved documents"):
+            docs = vectorstore.similarity_search(user_question, k=2)
+            result = "\n\n".join([doc.page_content for doc in docs])
+            st.write(result)
     
     # Clear chat history and user input when the Clear Chat button is clicked
     if st.button("Clear Chat"):
