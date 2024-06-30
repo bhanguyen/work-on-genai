@@ -38,34 +38,6 @@ class FlexibleOutputParser(AgentOutputParser):
         # If no clear pattern is found, treat the whole text as a thought
         return AgentAction(tool="human", tool_input="Unclear output. Please clarify your next step.", log=text)
 
-# Constants
-SQL_PREFIX = """
-You are an agent designed to interact with a SQL database.
-Given an input question, create a syntactically correct PostgreSQL query to run, then look at the results of the query and return the answer.
-Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
-You can order the results by a relevant column to return the most interesting examples in the database.
-Never query for all the columns from a specific table, only ask for the relevant columns given the question.
-You have access to tools for interacting with the database.
-Only use the below tools. Only use the information returned by the below tools to construct your final answer.
-You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
-
-DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
-
-To start you should ALWAYS look at the tables in the database to see what you can query.
-DO NOT skip this step.
-Then you should query the schema of the most relevant tables.
-
-DO NOT MAKE UP AN ANSWER OR USE PRIOR KNOWLEDGE, ONLY USE THE RESULTS OF THE CALCULATIONS YOU HAVE DONE.
-If the question does not seem related to the database, just return "I don't know" as the answer.
-ALWAYS, as part of your final answer, explain how you got to the answer on a section that starts with: 
-"Explanation:". Include the SQL query as part of the explanation section.
-
-Only use the below tools. Only use the information returned by the below tools to construct your query and final answer.
-DO NOT make up table names, only use the tables returned by any of the tools below.
-
-## Tools: 
-"""
-
 def get_db(connection_string, tables=None):
     """
     Create and return a SQLDatabase object.
@@ -148,21 +120,39 @@ def get_chain(connection_string, table, llm):
         llm: The language model instance.
 
     Returns:
-        SQLDatabaseSequentialChain: A chain object for processing SQL queries.
+        SQLDatabaseChain: A chain object for processing SQL queries.
 
     Example:
         llm = get_llm("OpenAI", "gpt-3.5-turbo")
         chain = get_chain("postgresql://user:password@localhost/dbname", "users", llm)
     """
+    
+    custom_prompt = PromptTemplate(
+        input_variables=["input", "table_info", "top_k"],
+        template="""
+        Given an input question, first create a syntactically correct {dialect} query to run, then return the query.
+        Use the following format:
+
+        Question: "Question here"
+        SQLQuery: SQL Query to run
+
+        Only use the following tables:
+        {table_info}
+
+        Question: {input}
+        SQLQuery: 
+        """
+    )
+
     db = get_db(connection_string, table)
     return SQLDatabaseChain.from_llm(
         llm=llm,
         db=db,
-        # prefix=SQL_PREFIX,
+        prompt=custom_prompt,
         verbose=True,  # For detailed output
-        return_sql=True,
-        # return_intermediate_steps=True,  # To see intermediate steps
-        use_query_checker=True,  # To check and potentially correct SQL queries
+        # return_sql=True,
+        return_intermediate_steps=True,  # To see intermediate steps
+        use_query_checker=False,  # To check and potentially correct SQL queries
     )
 
 def get_agent(connection_string, agent_type, table, llm):
@@ -186,6 +176,33 @@ def get_agent(connection_string, agent_type, table, llm):
         llm = get_llm("OpenAI", "gpt-3.5-turbo")
         agent = get_agent("postgresql://user:password@localhost/dbname", 
                                            AgentType.ZERO_SHOT_REACT_DESCRIPTION, "users", llm)
+    """
+
+    SQL_PREFIX = """
+    You are an agent designed to interact with a SQL database.
+    Given an input question, create a syntactically correct PostgreSQL query to run, then look at the results of the query and return the answer.
+    Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
+    You can order the results by a relevant column to return the most interesting examples in the database.
+    Never query for all the columns from a specific table, only ask for the relevant columns given the question.
+    You have access to tools for interacting with the database.
+    Only use the below tools. Only use the information returned by the below tools to construct your final answer.
+    You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
+
+    DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
+
+    To start you should ALWAYS look at the tables in the database to see what you can query.
+    DO NOT skip this step.
+    Then you should query the schema of the most relevant tables.
+
+    DO NOT MAKE UP AN ANSWER OR USE PRIOR KNOWLEDGE, ONLY USE THE RESULTS OF THE CALCULATIONS YOU HAVE DONE.
+    If the question does not seem related to the database, just return "I don't know" as the answer.
+    ALWAYS, as part of your final answer, explain how you got to the answer on a section that starts with: 
+    "Explanation:". Include the SQL query as part of the explanation section.
+
+    Only use the below tools. Only use the information returned by the below tools to construct your query and final answer.
+    DO NOT make up table names, only use the tables returned by any of the tools below.
+
+    ## Tools: 
     """
     db = get_db(connection_string, table)
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
