@@ -6,7 +6,7 @@ from langchain_community.vectorstores.pgvector import PGVector
 
 from applications.qa_bot.modules.process_documents import get_pdf_text, get_text_chunks
 from applications.qa_bot.modules.vectorstore import get_vectorstore
-from applications.qa_bot.modules.rag import get_conversation_chain
+from applications.qa_bot.modules.rag import get_conversation_chain, get_rag_chain
 from applications.qa_bot.htmlTemplates import css, bot_template, user_template
 
 # TODO: Add a function to handle user input
@@ -41,9 +41,12 @@ def handle_userinput(user_question):
                 "{{MSG}}", message.content), unsafe_allow_html=True)
 
 # Define a function to initialize the session state
-def initialize_session_state(vectorstore, model_type, model):
+def initialize_session_state(vectorstore, model_type, model, use_memory):
     if "conversation" not in st.session_state:
-        st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
+        if use_memory:
+            st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
+        else:
+            st.session_state.conversation = get_rag_chain(vectorstore, model_type, model)
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
@@ -94,6 +97,9 @@ def main():
             if not anthropic_api_key:
                 st.sidebar.error("Anthropic API key is not set. Please set the ANTHROPIC_API_KEY environment variable.")
         
+        # Add a checkbox for memory usage
+        use_memory = st.checkbox("Use Memory", value=False)
+
         # If the user clicks the "Process" button, the following code is executed:
         # i. raw_text = get_pdf_text(pdf_docs): retrieves the text content from the uploaded PDF documents.
         # ii. text_chunks = get_text_chunks(raw_text): splits the text content into smaller chunks for efficient processing.
@@ -111,9 +117,11 @@ def main():
                         CONNECTION_STRING, 
                         collection_name
                     )
-
-                    # create conversation chain
-                    st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
+                    # Initialize conversation based on memory choice
+                    if use_memory:
+                        st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
+                    else:
+                        st.session_state.conversation = get_rag_chain(vectorstore, model_type, model)
                     st.success('PDF uploaded successfully!', icon="✅")
                 except Exception as e:
                     st.error(f"Error processing PDFs: {str(e)}")
@@ -126,7 +134,7 @@ def main():
     # Select chat model
     vectorstore = get_vectorstore(None, CONNECTION_STRING)
     try:
-        initialize_session_state(vectorstore, model_type, model)
+        initialize_session_state(vectorstore, model_type, model, use_memory)
     except Exception as e:
         if model_type == 'OpenAI':
             st.warning('Missing OpenAI key')
@@ -142,7 +150,13 @@ def main():
         with st.spinner("Processing..."):
             handle_userinput(user_question)
         with st.expander("See retrieved documents"):
-            docs = vectorstore.similarity_search(user_question, k=2)
+            retriever = vectorstore.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 3, "include_metadata": True}
+            )
+            docs = retriever.invoke(user_question)
+            st.write(docs)
+            # docs = vectorstore.similarity_search(user_question, k=2)
             result = "\n\n".join([doc.page_content for doc in docs])
             st.write(result)
     
