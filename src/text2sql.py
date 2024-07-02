@@ -8,7 +8,6 @@ import sys
 from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain.agents import AgentExecutor
 
-# Add the project root to the PYTHONPATH
 # Import custom modules
 from applications.text_to_sql.utils import connect_to_db, get_tables, load_table
 from applications.text_to_sql.get_sql_answer import get_chain, get_agent, get_llm
@@ -160,7 +159,7 @@ def main():
                         
                         # Assign agent type based on LLM
                         if llm_name == 'OpenAI':
-                            agent_type = 'tool-calling'
+                            agent_type = 'openai-tools'
                         else:  # For Ollama and Anthropic
                             agent_type = 'zero-shot-react-description'
                         
