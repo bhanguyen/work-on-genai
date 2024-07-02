@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import traceback
+
 from langchain_community.vectorstores.pgvector import PGVector
 
 from applications.qa_bot.modules.process_documents import get_pdf_text, get_text_chunks
@@ -41,12 +42,9 @@ def handle_userinput(user_question):
                 "{{MSG}}", message.content), unsafe_allow_html=True)
 
 # Define a function to initialize the session state
-def initialize_session_state(vectorstore, model_type, model, use_memory):
+def initialize_session_state(vectorstore, model_type, model):
     if "conversation" not in st.session_state:
-        if use_memory:
-            st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
-        else:
-            st.session_state.conversation = get_rag_chain(vectorstore, model_type, model)
+        st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
@@ -97,8 +95,8 @@ def main():
             if not anthropic_api_key:
                 st.sidebar.error("Anthropic API key is not set. Please set the ANTHROPIC_API_KEY environment variable.")
         
-        # Add a checkbox for memory usage
-        use_memory = st.checkbox("Use Memory", value=False)
+        # # Add a checkbox for memory usage
+        # use_memory = st.checkbox("Use Memory", value=False)
 
         # If the user clicks the "Process" button, the following code is executed:
         # i. raw_text = get_pdf_text(pdf_docs): retrieves the text content from the uploaded PDF documents.
@@ -118,10 +116,7 @@ def main():
                         collection_name
                     )
                     # Initialize conversation based on memory choice
-                    if use_memory:
-                        st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
-                    else:
-                        st.session_state.conversation = get_rag_chain(vectorstore, model_type, model)
+                    st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
                     st.success('PDF uploaded successfully!', icon="✅")
                 except Exception as e:
                     st.error(f"Error processing PDFs: {str(e)}")
@@ -134,7 +129,7 @@ def main():
     # Select chat model
     vectorstore = get_vectorstore(None, CONNECTION_STRING)
     try:
-        initialize_session_state(vectorstore, model_type, model, use_memory)
+        initialize_session_state(vectorstore, model_type, model)
     except Exception as e:
         if model_type == 'OpenAI':
             st.warning('Missing OpenAI key')
