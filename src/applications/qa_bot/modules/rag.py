@@ -2,12 +2,57 @@ import os
 from langchain.memory import ConversationSummaryBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
-
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_models import ChatOllama, ChatOpenAI, ChatAnthropic
 
 import streamlit as st
 
-def initialize_chat_model(model_type: str, model: str):
+
+def init_retriever(vectorstore):
+    """
+    Initialize and return a retriever from a given vector store.
+
+    Args:
+        vectorstore (VectorStore): The vector store to use for retrieval.
+
+    Returns:
+        Retriever: A configured retriever object.
+    """
+    return vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 3, "include_metadata": True}
+    )
+
+def init_prompt():
+    """
+    Initialize and return a prompt template for question answering.
+
+    Returns:
+        PromptTemplate: A configured prompt template object.
+    """
+    prompt_template = """
+    You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
+    Always use English as the language in your responses.
+    In your answers, always use a professional tone.
+    Simply answer the question clearly and with lots of detail using only the relevant details from the information below. 
+    If the context does not contain the answer, say "Sorry, I didn't understand that. Could you rephrase your question?"
+    Use three sentences maximum and keep the answer concise.
+
+    Now read this context below and answer the question at the bottom.
+    
+    Context: {context}
+
+    Question: {question}
+    
+    Answer:
+    """
+    return PromptTemplate(
+        template=prompt_template, 
+        input_variables=["context", "question"]
+    )
+
+def init_chat_model(model_type: str, model: str):
     """
     Initialize and return a chat model based on the specified type and model name.
 
@@ -45,7 +90,7 @@ def initialize_chat_model(model_type: str, model: str):
         # Log the error and return None if initialization fails
         st.warning(f"Error initializing {model_type} model {model}: {str(e)}")
         return None
-
+    
 def get_conversation_chain(vectorstore, model_type: str, model: str):
     """
     Generate and return a conversational chain for question answering.
@@ -54,52 +99,22 @@ def get_conversation_chain(vectorstore, model_type: str, model: str):
     vector store and language model.
 
     Args:
-        vectorstore (object): The vector store containing the document embeddings.
+        vectorstore (VectorStore): The vector store containing the document embeddings.
         model_type (str): The type of language model to use ('OpenAI', 'Ollama', or 'Anthropic').
         model (str): The specific model name to use.
 
     Returns:
-        function: An invocable function that runs the conversation chain.
+        Callable: An invocable function that runs the conversation chain.
 
     Raises:
         ValueError: If the language model initialization fails.
     """
-
-    # Step 1: Define retriever
-    retriever = vectorstore.as_retriever(
-        search_type="similarity",
-        search_kwargs={"k": 1, "include_metadata": True}
-    )
-
-    # Step 2: Define the prompt template
-    prompt_template = """
-    You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. 
-    Always use English as the language in your responses.
-    In your answers, always use a professional tone.
-    Simply answer the question clearly and with lots of detail using only the relevant details from the information below. 
-    If the context does not contain the answer, say "Sorry, I didn't understand that. Could you rephrase your question?"
-    Use three sentences maximum and keep the answer concise.
-
-    Now read this context below and answer the question at the bottom.
+    # Initialize components
+    retriever = init_retriever(vectorstore)
+    PROMPT = init_prompt()
+    llm = init_chat_model(model_type, model)
     
-    Context: {context}
-
-    Question: {question}
-    
-    Answer:
-    """
-    PROMPT = PromptTemplate(
-            template=prompt_template, 
-            input_variables=["context", "question"]
-    )
-
-    # Step 3: Initialize the language model
-    llm = initialize_chat_model(model_type, model)
-    
-    if llm is None:
-        raise ValueError(f"Failed to initialize the model: {model_type} - {model}")
-    
-    # Step 4: Set up conversation memory
+    # Set up conversation memory
     memory = ConversationSummaryBufferMemory(
         llm=llm,
         memory_key='chat_history',
@@ -108,18 +123,55 @@ def get_conversation_chain(vectorstore, model_type: str, model: str):
         output_key='answer'
     )
     
-    # Step 5: Create the conversational retrieval chain
+    # Create the conversational retrieval chain
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         chain_type='stuff',  # 'stuff' method: stuff all retrieved documents into the prompt
         combine_docs_chain_kwargs={'prompt': PROMPT},
         retriever=retriever,
-        # To get chat history as it is
-        # To limit the history to 5 get_chat_history=lambda h : h[-5:]
-        get_chat_history=lambda h : h,
+        get_chat_history=lambda h: h,  # Use full chat history
         memory=memory,
         return_source_documents=True,
         verbose=True  # Set to True for detailed logging
     )
     
     return conversation_chain.invoke
+
+def get_rag_chain(vectorstore, model_type: str, model: str):
+    """
+    Generate and return a Retrieval-Augmented Generation (RAG) chain.
+
+    This function sets up a RAG system using the specified vector store and language model.
+
+    Args:
+        vectorstore (VectorStore): The vector store containing the document embeddings.
+        model_type (str): The type of language model to use ('OpenAI', 'Ollama', or 'Anthropic').
+        model (str): The specific model name to use.
+
+    Returns:
+        Runnable: A runnable RAG chain.
+
+    Raises:
+        ValueError: If the language model initialization fails.
+    """
+    # Initialize components
+    retriever = init_retriever(vectorstore)
+    PROMPT = init_prompt()
+    llm = init_chat_model(model_type, model)
+
+    def format_docs(docs):
+        """Combine the content of multiple documents into a single string."""
+        return "\n\n".join([doc.page_content for doc in docs])
+    
+    # Create RAG chain
+    rag_chain = (
+        {
+            "context": retriever | format_docs,
+            "question": RunnablePassthrough()
+        }
+        | PROMPT
+        | llm
+        | StrOutputParser()
+    )
+
+    return rag_chain
