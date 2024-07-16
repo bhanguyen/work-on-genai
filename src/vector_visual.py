@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,9 +6,12 @@ from mpl_toolkits.mplot3d import Axes3D
 from sklearn.decomposition import PCA
 import psycopg2
 from sentence_transformers import SentenceTransformer
+import os
+from dotenv import load_dotenv
+
 
 # Set page configuration
-st.set_page_config(page_title="Embedding Vectors Visualization", layout="wide")
+# st.set_page_config(page_title="Embedding Vectors Visualization", layout="wide")
 
 # Initialize the sentence transformer model for generating query embedding if not in the database
 @st.cache_resource
@@ -19,12 +23,14 @@ model = load_model()
 # Function to query the PostgreSQL database
 @st.cache_data
 def query_database(query):
+    load_dotenv()
+
     conn = psycopg2.connect(
-        dbname='rag',
-        user='postgres',
-        password='Password',
-        host='localhost',
-        port='5432'
+        dbname=os.environ['PGVECTOR_DATABASE'],
+        user=os.environ['PGVECTOR_USER'],
+        password=os.environ['PGVECTOR_PASSWORD'],
+        host=os.environ['PGVECTOR_HOST'],
+        port=os.environ['PGVECTOR_PORT']
     )
     cursor = conn.cursor()
     cursor.execute(query)
@@ -89,7 +95,6 @@ def plot_embeddings_3d(embeddings, query_embedding):
 
 def main(context_node_ids):
     st.title("Embedding Vectors Visualization")
-
     # Input query
     query = st.text_input("Enter your query:", "hello world")
 
