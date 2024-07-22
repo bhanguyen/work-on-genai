@@ -33,6 +33,9 @@ PyPDF2
 
 # Llama-index
 llama-index
+llama-index-embeddings-huggingface
+llama-index-embeddings-openai
+llama-index-vector-stores-postgres
 
 #Hugging Face
 # dataset
