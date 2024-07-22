@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 
 # Set page configuration
-# st.set_page_config(page_title="Embedding Vectors Visualization", layout="wide")
+# st.set_page_config(layout="centered")
 
 # Initialize the sentence transformer model for generating query embedding if not in the database
 @st.cache_resource
@@ -93,10 +93,10 @@ def plot_embeddings_3d(embeddings, query_embedding):
     plt.title('Embedding Vectors Visualization (3D)')
     st.pyplot(fig)
 
-def main(context_node_ids):
+def main(context_node_ids, question):
     st.title("Embedding Vectors Visualization")
     # Input query
-    query = st.text_input("Enter your query:", "hello world")
+    query = question
 
     # Example node_ids for context
     context_node_ids = context_node_ids
@@ -157,5 +157,5 @@ if __name__ == "__main__":
         'e8c1d19f-0200-4129-b875-207af0e4ac9e',
         '1f2a47e5-7a42-4a3d-9c33-ab50a3201456'
     ]
-
-    main(context_node_ids)
+    query = st.text_input("Enter your query:")
+    main(context_node_ids, query)

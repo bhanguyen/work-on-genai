@@ -88,16 +88,6 @@ def get_llama_index_embeddings() -> HuggingFaceEmbedding:
     return HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
 
 @st.cache_resource
-def get_db_engine():
-    """
-    Get or create a cached SQLAlchemy engine with connection pooling.
-    
-    Returns:
-        Engine: The SQLAlchemy engine.
-    """
-    connection_string = "postgresql://postgres:Password@localhost:5432/rag"
-    return create_engine(connection_string, poolclass=QueuePool)
-
 def get_llama_index_vector_store() -> PGVectorStore:
     """
     Create a PostgreSQL vector store.
@@ -105,7 +95,15 @@ def get_llama_index_vector_store() -> PGVectorStore:
     Returns:
         PGVectorStore: The vector store.
     """
-    return PGVectorStore.from_engine(get_db_engine(), embed_dim=768)
+    # engine = get_db_engine()
+    return PGVectorStore.from_params(
+                        user = os.environ.get("PGVECTOR_USER"),                                      
+                        password = os.environ.get("PGVECTOR_PASSWORD"),                                  
+                        host = os.environ.get("PGVECTOR_HOST"),                                            
+                        port = os.environ.get("PGVECTOR_PORT"),                                          
+                        database = os.environ.get("PGVECTOR_DATABASE"),
+                        embed_dim=768
+                        )
 
 def process_documents(documents: List[Document]) -> PGVectorStore:
     """
@@ -142,13 +140,17 @@ def process_documents(documents: List[Document]) -> PGVectorStore:
     logger = logging.getLogger(__name__)
     logger.info(f"Starting document processing for {len(documents)} documents.")
 
-    # Process documents with a progress bar
-    with st.progress(0) as progress_bar:
-        for i, doc in enumerate(documents):
-            # Process each document individually
-            pipeline.run(documents=[doc])
-            # Update progress bar
-            progress_bar.progress((i + 1) / len(documents))
+    for i, doc in enumerate(documents):
+        # Process each document individually
+        pipeline.run(documents=[doc])
+
+    # # Process documents with a progress bar
+    # with st.progress(0) as progress_bar:
+    #     for i, doc in enumerate(documents):
+    #         # Process each document individually
+    #         pipeline.run(documents=[doc])
+    #         # Update progress bar
+    #         progress_bar.progress((i + 1) / len(documents))
 
     logger.info("Document processing completed.")
     return vector_store

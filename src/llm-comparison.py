@@ -6,60 +6,31 @@ The app allows users to select different Ollama models and visualizes the genera
 
 import streamlit as st
 import os
+import PyPDF2
 from dotenv import load_dotenv
 
+# Import langchain libraries for prompting and chat models
 from langchain_community.chat_models import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableSequence
 from langchain.callbacks import StreamlitCallbackHandler
-from langchain_community.vectorstores import PGVector
-from langchain_community.vectorstores.pgvector import PGVector
 import anthropic
 
-# Import custom vectorstore module
-from applications.qa_bot.modules.vectorstore import get_vectorstore
+# Import LlamaIndex libraries for document processing and retrieval
+from llama_index.core import Document
 
+# Import custom vectorstore module
+from applications.qa_bot.modules.vectorstore import (
+    get_llama_index_retriever, 
+    process_documents
+)
 # Load environment variables
 load_dotenv()
 
 # Set up API keys
 openai_api_key = os.getenv("OPENAI_API_KEY")
 anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-
-# # Set up PostgreSQL connection string
-# CONNECTION_STRING = PGVector.connection_string_from_db_params(                                                  
-#         driver = os.environ.get("PGVECTOR_DRIVER"),
-#         user = os.environ.get("PGVECTOR_USER"),                                      
-#         password = os.environ.get("PGVECTOR_PASSWORD"),                                  
-#         host = os.environ.get("PGVECTOR_HOST"),                                            
-#         port = os.environ.get("PGVECTOR_PORT"),                                          
-#         database = os.environ.get("PGVECTOR_DATABASE")
-#     )
-
-# # Initialize vectorstore
-# vectorstore = get_vectorstore(None, CONNECTION_STRING)
-
-# def get_relevant_context(query: str, top_k: int = 3) -> str:
-#     """
-#     Retrieve relevant context from the vector store based on the input query.
-
-#     Args:
-#         query (str): The input question or prompt.
-#         top_k (int): The number of most relevant documents to retrieve.
-
-#     Returns:
-#         str: A string containing the concatenated content of the most relevant documents.
-#     """
-#     docs = vectorstore.similarity_search(query, k=top_k)
-#     return "\n\n".join([doc.page_content for doc in docs])
-
-from applications.qa_bot.modules.vectorstore import (
-    get_llama_index_retriever, 
-    process_documents
-)
-from llama_index.core import Document
-import PyPDF2
 
 def extract_text_from_pdf(uploaded_files):
     text_data = []
@@ -72,7 +43,8 @@ def extract_text_from_pdf(uploaded_files):
             text_data.append(page_obj.extract_text())
     return text_data
 
-def get_relevant_llama_index(query: str):
+@st.cache_data
+def get_relevant_context(query: str):
     # vector_store = get_llama_index_vector_store()
     llama_index_retriever = get_llama_index_retriever()
 
@@ -81,15 +53,21 @@ def get_relevant_llama_index(query: str):
     return "\n\n".join([doc.text for doc in docs]), docs
     # return docs
 
-# Set temperature 
-temperature = st.sidebar.slider("Temperature", min_value=0.0, max_value=2.0, value=0.0, step=0.01)
+def get_prompt_template(context: str, question: str):
+    return ChatPromptTemplate.from_template(
+        "Context: {context}\n\nQuestion: {question}\n\nAnswer:"
+    )
 
-# Set up Langchain components
-prompt_template = ChatPromptTemplate.from_template("Context: {context}\n\nQuestion: {question}\n\nAnswer:")
-
-# Initialize OpenAI model
-openai_llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=temperature)
-openai_chain = RunnableSequence(prompt_template | openai_llm)
+def get_openai_response(context: str, question: str, model: str, temperature):
+    # Initialize OpenAI model
+    openai_llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=temperature)
+    prompt_template = get_prompt_template(context, question)
+    openai_chain = RunnableSequence(prompt_template | openai_llm)
+    openai_response = openai_chain.invoke(
+        {"context": context, "question": user_prompt}, 
+        config={"callbacks": [StreamlitCallbackHandler(st.container())]}
+    )
+    return openai_response.content
 
 # Function to get Claude 3.5 Sonnet response
 def get_claude_response(context: str, question: str) -> str:
@@ -105,9 +83,26 @@ def get_claude_response(context: str, question: str) -> str:
     )
     return message.content[0].text
 
+# Function to get Ollama's response
+def get_ollama_response(context: str, question: str, model: str, temperature):
+    # Initialize Ollama LLM with the selected model
+    ollama_llm = ChatOllama(model=selected_ollama_model, temperature=temperature)
+    prompt_template = get_prompt_template(context, question)
+    ollama_chain = RunnableSequence(prompt_template | ollama_llm)
+    ollama_response = ollama_chain.invoke(
+        {"context": context, "question": user_prompt}, 
+        config={"callbacks": [StreamlitCallbackHandler(st.container())]}
+    )
+    return ollama_response.content
+
 # Streamlit UI setup
-from applications.qa_bot.modules.process_documents import get_pdf_text
+st.set_page_config(layout="wide")
+st.title("LLM Response Comparison with LlamaIndex :llama:")
+st.write("This application compare the responses between different LLM including phi3, llama3, mistral, openai, anthropic")
+
+# Setup sidebar
 with st.sidebar:
+    # Upload documents
     st.subheader("Your documents")
     pdf_docs = st.file_uploader(
         "Upload your PDFs here and click on 'Process'", 
@@ -115,40 +110,60 @@ with st.sidebar:
         accept_multiple_files=True
     )
     
+    # Process documents
     if st.button("Process"):
         with st.spinner("Processing"):
             # get pdf text
-            # text_docs = get_pdf_text(pdf_docs)
             text_docs = extract_text_from_pdf(pdf_docs)
             documents = [Document(text=doc) for doc in text_docs]  # Convert to Document objects
             vector_store = process_documents(documents)
             st.success('PDF uploaded successfully!', icon="✅")
 
-st.title("LLM Response Comparison")
-st.write("This application compare the responses between different LLM including phi3, llama3, mistral, openai, anthropic")
-
 # Ollama model selection in the sidebar
 ollama_models = ["phi3", "llama3", "mistral"]
 selected_ollama_model = st.sidebar.selectbox("Select Ollama Model", ollama_models)
 
-# Initialize Ollama LLM with the selected model
-ollama_llm = ChatOllama(model=selected_ollama_model, temperature=temperature)
-ollama_chain = RunnableSequence(prompt_template | ollama_llm)
+# Sidebar information and warnings
+st.sidebar.title("Settings")
+# Set temperature 
+temperature = st.sidebar.slider("Temperature", min_value=0.0, max_value=2.0, value=0.0, step=0.01)
+st.sidebar.info("Make sure to set your API keys and connection string as environment variables:\n\n"
+                "OPENAI_API_KEY\n"
+                "ANTHROPIC_API_KEY")
+st.sidebar.warning("Ensure Ollama is running locally on the default port.")
 
 # Main input area for user prompt
-user_prompt = st.text_area("Enter your prompt:")
+user_prompt = st.text_input("Enter your prompt:")
+from vector_visual import main
+if st.button("Check Embedding", key="embedding"):
+# with st.expander("See Embedding"):
+    context_node_ids = [
+                'e6cc36a4-4ac1-4840-b3e7-3360fb7b68b3',
+                '18d79297-540a-41b5-90f5-79ae1dcb196e',
+                '093d9c81-4db6-4f41-a7bb-439130ecb013',
+                '9d493f75-7b05-4ce0-9b2c-fe123414fc20',
+                'd756cc58-a2fb-45b1-9f64-a85fbda72599',
+                '0187ecc2-238e-49d6-8695-f943253c7c8f',
+                '7e0f7f7c-86b0-43c6-a839-2764528c2e8a',
+                '18a1329d-6f35-468e-bb8f-cbc69d89187f',
+                'd5b18386-dc02-4885-84f3-5c94ea52b086',
+                '59c41c65-77e0-46a1-99e3-b8cfad25efe7',
+                'e8c1d19f-0200-4129-b875-207af0e4ac9e',
+                '1f2a47e5-7a42-4a3d-9c33-ab50a3201456'
+            ]
+    main(context_node_ids, user_prompt)
+
 
 if st.button("Generate Responses", key="response"):
     if user_prompt:
-    # Retrieve relevant context from the vector store
-    # context = get_relevant_context(user_prompt)
-    # st.subheader("Retrieved Context:")
-    # st.write(context)
-        context, docs = get_relevant_llama_index(user_prompt)
+        # Retrieve relevant context from the vector store
+        context, docs = get_relevant_context(user_prompt)
         
         tab1, tab2, tab3 = st.tabs(["Retrieved Context", "Generated Questions", "Responses"])
+            
         with tab1:
             st.write(context)
+
         with tab2:
             for doc in docs:
                 st.write(doc.metadata['document_title'])
@@ -163,8 +178,13 @@ if st.button("Generate Responses", key="response"):
             with col1:
                 st.subheader(f"Ollama ({selected_ollama_model})")
                 with st.spinner("Generating..."):
-                    ollama_response = ollama_chain.invoke({"context": context, "question": user_prompt}, config={"callbacks": [StreamlitCallbackHandler(st.container())]})
-                st.write(ollama_response.content)
+                    ollama_response = get_ollama_response(
+                        context=context, 
+                        question=user_prompt,
+                        model=selected_ollama_model, 
+                        temperature=temperature
+                    )
+                st.write(ollama_response)
             
             # Generate and display Anthropic (Claude 3.5 Sonnet) response
             with col2:
@@ -177,18 +197,15 @@ if st.button("Generate Responses", key="response"):
             with col3:
                 st.subheader("OpenAI (GPT-3.5)")
                 with st.spinner("Generating..."):
-                    openai_response = openai_chain.invoke({"context": context, "question": user_prompt}, config={"callbacks": [StreamlitCallbackHandler(st.container())]})
-                st.write(openai_response.content)
+                    openai_response = get_openai_response(
+                        context=context,
+                        question=user_prompt,
+                        model="gpt-3.5-turbo",
+                        temperature=temperature
+                    )
+                st.write(openai_response)
     else:
         st.warning("Please enter a question.")
-
-# Sidebar information and warnings
-st.sidebar.title("Settings")
-st.sidebar.info("Make sure to set your API keys and connection string as environment variables:\n\n"
-                "OPENAI_API_KEY\n"
-                "ANTHROPIC_API_KEY\n"
-                "PG_CONNECTION_STRING")
-st.sidebar.warning("Ensure Ollama is running locally on the default port.")
 
 # Check for missing API keys and connection string
 if not openai_api_key:
