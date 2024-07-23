@@ -51,7 +51,6 @@ def get_relevant_context(query: str):
     docs = llama_index_retriever.retrieve(query)
 
     return "\n\n".join([doc.text for doc in docs]), docs
-    # return docs
 
 def get_prompt_template(context: str, question: str):
     return ChatPromptTemplate.from_template(
@@ -60,7 +59,7 @@ def get_prompt_template(context: str, question: str):
 
 def get_openai_response(context: str, question: str, model: str, temperature):
     # Initialize OpenAI model
-    openai_llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=temperature)
+    openai_llm = ChatOpenAI(model=model, openai_api_key=openai_api_key, temperature=temperature)
     prompt_template = get_prompt_template(context, question)
     openai_chain = RunnableSequence(prompt_template | openai_llm)
     openai_response = openai_chain.invoke(
@@ -70,10 +69,10 @@ def get_openai_response(context: str, question: str, model: str, temperature):
     return openai_response.content
 
 # Function to get Claude 3.5 Sonnet response
-def get_claude_response(context: str, question: str) -> str:
+def get_claude_response(context: str, question: str, model: str, temperature):
     anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key)
     message = anthropic_client.messages.create(
-        model="claude-3-5-sonnet-20240620",
+        model=model,
         max_tokens=1000,
         temperature=temperature,
         system="You are a helpful AI assistant. Use the provided context to answer the user's question.",
@@ -86,7 +85,7 @@ def get_claude_response(context: str, question: str) -> str:
 # Function to get Ollama's response
 def get_ollama_response(context: str, question: str, model: str, temperature):
     # Initialize Ollama LLM with the selected model
-    ollama_llm = ChatOllama(model=selected_ollama_model, temperature=temperature)
+    ollama_llm = ChatOllama(model=model, temperature=temperature)
     prompt_template = get_prompt_template(context, question)
     ollama_chain = RunnableSequence(prompt_template | ollama_llm)
     ollama_response = ollama_chain.invoke(
@@ -95,6 +94,43 @@ def get_ollama_response(context: str, question: str, model: str, temperature):
     )
     return ollama_response.content
 
+# Display response
+def display_response(model, prompt):
+    model_categories = {
+        "Ollama": ["phi3", "llama3", "mistral", "gemma2"],
+        "Anthropic": ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-2.1"],
+        "OpenAI": ["gpt-4", "gpt-3.5-turbo"]
+    }
+    try:
+        if model in model_categories["Ollama"]:
+            with st.spinner("Generating..."):
+                    ollama_response = get_ollama_response(
+                        context=context, 
+                        question=user_prompt,
+                        model=model, 
+                        temperature=temperature
+                    )
+            st.write(ollama_response)
+            
+        elif model in model_categories["Anthropic"]:
+            with st.spinner("Generating..."):
+                    claude_response = get_claude_response(context, user_prompt)
+            st.write(claude_response)
+
+        elif model in model_categories["OpenAI"]:
+            with st.spinner("Generating..."):
+                    openai_response = get_openai_response(
+                        context=context,
+                        question=user_prompt,
+                        model=model,
+                        temperature=temperature
+                    )
+            st.write(openai_response)
+        else:
+            raise ValueError(f"Unknown model: {model}")
+    except Exception as e:
+        st.error(f"Error generating response from {model}: {str(e)}")
+    
 # Streamlit UI setup
 st.set_page_config(layout="wide")
 st.title("LLM Response Comparison with LlamaIndex :llama:")
@@ -120,8 +156,32 @@ with st.sidebar:
             st.success('PDF uploaded successfully!', icon="✅")
 
 # Ollama model selection in the sidebar
-ollama_models = ["phi3", "llama3", "mistral"]
-selected_ollama_model = st.sidebar.selectbox("Select Ollama Model", ollama_models)
+# ollama_models = ["phi3", "llama3", "mistral"]
+# selected_ollama_model = st.sidebar.selectbox("Select Ollama Model", ollama_models)
+model_categories = {
+"Ollama": ["phi3", "llama3", "mistral", "gemma2"],
+"Anthropic": ["claude-3-haiku-20240307", "claude-3-sonnet-20240229", "claude-3-5-sonnet-20240620"],
+"OpenAI": ["gpt-40-mini", "gpt-3.5-turbo"]
+}
+with st.sidebar:
+    # Initialize session state for selections
+    if 'selected_models' not in st.session_state:
+        st.session_state.selected_models = {category: [] for category in model_categories}
+
+    # Category selection using checkboxes and model selection
+    for category, models in model_categories.items():
+        category_selected = st.checkbox(f"Include {category} models")
+        if category_selected:
+            st.session_state.selected_models[category] = st.multiselect(
+                f"Select {category} models:",
+                models,
+                default=st.session_state.selected_models[category]
+            )
+        else:
+            st.session_state.selected_models[category] = []
+
+# Flatten the selected models list
+selected_models = [model for models in st.session_state.selected_models.values() for model in models]
 
 # Sidebar information and warnings
 st.sidebar.title("Settings")
@@ -133,10 +193,9 @@ st.sidebar.info("Make sure to set your API keys and connection string as environ
 st.sidebar.warning("Ensure Ollama is running locally on the default port.")
 
 # Main input area for user prompt
-user_prompt = st.text_input("Enter your prompt:")
+user_prompt = st.text_input("Enter your prompt:", placeholder="Your query")
 from vector_visual import main
-if st.button("Check Embedding", key="embedding"):
-# with st.expander("See Embedding"):
+with st.expander("Check Query Embedding"):
     context_node_ids = [
                 'e6cc36a4-4ac1-4840-b3e7-3360fb7b68b3',
                 '18d79297-540a-41b5-90f5-79ae1dcb196e',
@@ -153,14 +212,13 @@ if st.button("Check Embedding", key="embedding"):
             ]
     main(context_node_ids, user_prompt)
 
-
 if st.button("Generate Responses", key="response"):
     if user_prompt:
         # Retrieve relevant context from the vector store
         context, docs = get_relevant_context(user_prompt)
         
         tab1, tab2, tab3 = st.tabs(["Retrieved Context", "Generated Questions", "Responses"])
-            
+        
         with tab1:
             st.write(context)
 
@@ -171,41 +229,47 @@ if st.button("Generate Responses", key="response"):
                 st.write(doc.score)
         
         with tab3:
-            # Create three columns for displaying LLM responses
-            col1, col2, col3 = st.columns(3)
+    #         # Create three columns for displaying LLM responses
+    #         col1, col2, col3 = st.columns(3)
             
-            # Generate and display Ollama response
-            with col1:
-                st.subheader(f"Ollama ({selected_ollama_model})")
-                with st.spinner("Generating..."):
-                    ollama_response = get_ollama_response(
-                        context=context, 
-                        question=user_prompt,
-                        model=selected_ollama_model, 
-                        temperature=temperature
-                    )
-                st.write(ollama_response)
+    #         # Generate and display Ollama response
+    #         with col1:
+    #             st.subheader(f"Ollama ({selected_ollama_model})")
+    #             with st.spinner("Generating..."):
+    #                 ollama_response = get_ollama_response(
+    #                     context=context, 
+    #                     question=user_prompt,
+    #                     model=selected_ollama_model, 
+    #                     temperature=temperature
+    #                 )
+    #             st.write(ollama_response)
             
-            # Generate and display Anthropic (Claude 3.5 Sonnet) response
-            with col2:
-                st.subheader("Anthropic (Claude 3.5 Sonnet)")
-                with st.spinner("Generating..."):
-                    claude_response = get_claude_response(context, user_prompt)
-                st.write(claude_response)
+    #         # Generate and display Anthropic (Claude 3.5 Sonnet) response
+    #         with col2:
+    #             st.subheader("Anthropic (Claude 3.5 Sonnet)")
+    #             with st.spinner("Generating..."):
+    #                 claude_response = get_claude_response(context, user_prompt)
+    #             st.write(claude_response)
             
-            # Generate and display OpenAI response
-            with col3:
-                st.subheader("OpenAI (GPT-3.5)")
-                with st.spinner("Generating..."):
-                    openai_response = get_openai_response(
-                        context=context,
-                        question=user_prompt,
-                        model="gpt-3.5-turbo",
-                        temperature=temperature
-                    )
-                st.write(openai_response)
-    else:
-        st.warning("Please enter a question.")
+    #         # Generate and display OpenAI response
+    #         with col3:
+    #             st.subheader("OpenAI (GPT-3.5)")
+    #             with st.spinner("Generating..."):
+    #                 openai_response = get_openai_response(
+    #                     context=context,
+    #                     question=user_prompt,
+    #                     model="gpt-3.5-turbo",
+    #                     temperature=temperature
+    #                 )
+    #             st.write(openai_response)
+    # else:
+    #     st.warning("Please enter a question.")
+            
+
+            tabs = st.tabs(selected_models)
+            for i, tab in enumerate(tabs):
+                with tab:
+                    display_response(selected_models[i], user_prompt)
 
 # Check for missing API keys and connection string
 if not openai_api_key:
