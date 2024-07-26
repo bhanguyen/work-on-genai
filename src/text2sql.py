@@ -65,12 +65,12 @@ def main():
         selected_llms = st.multiselect("Select LLMs", llm_options, default=['Ollama'])
         
         # Create columns based on selected LLMs
-        llm_cols = st.columns(len(selected_llms))
+        # llm_cols = st.columns(len(selected_llms))
         
         # Model selection for each LLM
         selected_models = {}
         for i, llm in enumerate(selected_llms):
-            with llm_cols[i]:
+            # with llm_cols[i]:
                 st.subheader(llm)
                 if llm == 'Ollama':
                     model_options = ['phi3', 'llama3', 'mistral']
