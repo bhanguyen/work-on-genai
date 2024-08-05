@@ -22,12 +22,12 @@ from langchain.callbacks import StreamlitCallbackHandler
 from llama_index.core import Document
 
 # Import custom module
-from applications.qa_bot.modules.vectorstore import (
+from src.applications.qa_bot.modules.vectorstore import (
     get_llama_index_retriever, 
     process_documents
 )
 # from applications.qa_bot.modules.process_documents import extract_text_from_pdf
-from vector_visual import main
+from src.vector_visual import main
 
 # Load environment variables
 load_dotenv()

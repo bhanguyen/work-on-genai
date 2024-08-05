@@ -5,14 +5,14 @@ import traceback
 
 from langchain_community.vectorstores.pgvector import PGVector
 
-from applications.qa_bot.modules.process_documents import get_pdf_text, get_text_chunks
-from applications.qa_bot.modules.vectorstore import (
+from src.applications.qa_bot.modules.process_documents import get_pdf_text, get_text_chunks
+from src.applications.qa_bot.modules.vectorstore import (
     get_vectorstore,
     get_llama_index_vector_store,
     get_llama_index_retriever
 )
-from applications.qa_bot.modules.rag import get_conversation_chain, get_rag_chain
-from applications.qa_bot.htmlTemplates import css, bot_template, user_template
+from src.applications.qa_bot.modules.rag import get_conversation_chain, get_rag_chain
+from src.applications.qa_bot.htmlTemplates import css, bot_template, user_template
 
 def handle_userinput(user_question):
     if "chat_history" not in st.session_state:

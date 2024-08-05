@@ -9,8 +9,8 @@ from langchain_community.callbacks import StreamlitCallbackHandler
 from langchain.agents import AgentExecutor
 
 # Import custom modules
-from applications.text_to_sql.utils import connect_to_db, get_tables, load_table
-from applications.text_to_sql.get_sql import get_chain, get_agent, get_llm
+from src.applications.text_to_sql.utils import connect_to_db, get_tables, load_table
+from src.applications.text_to_sql.get_sql import get_chain, get_agent, get_llm
 
 # Load environment variables
 load_dotenv()
