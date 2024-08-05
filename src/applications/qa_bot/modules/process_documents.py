@@ -1,7 +1,6 @@
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-# TODO: Add a function to get the text from a single PDF
 def get_pdf_text(pdf_docs):
     """
     Extracts the text content from a list of PDF documents.
@@ -25,7 +24,6 @@ def get_pdf_text(pdf_docs):
     return text
 
 
-# TODO: Add a function to break the pdf in chunks
 def get_text_chunks(text):
     """
     Splits the given text into smaller chunks with a specified chunk size and overlap.
@@ -53,3 +51,36 @@ def get_text_chunks(text):
 
     # Return the list of text chunks
     return chunks
+
+# For LlamaIndex
+from tqdm import tqdm
+def extract_text_from_pdf(uploaded_files: list[str]) -> list:
+    """
+    Extract text from uploaded PDF files.
+
+    Args:
+        uploaded_files (list[str]): A list of file paths to the PDFs.
+
+    Returns:
+        list: A list of extracted text from each page of the PDFs.
+    """
+    results = []
+    for uploaded_file in tqdm(uploaded_files, desc="Processing"):
+        try:
+            with open(uploaded_file, 'rb') as file:
+                reader = PdfReader(file)
+                num_pages = len(reader.pages)
+
+                if num_pages == 0:
+                    print(f"No pages found in {uploaded_file}. Skipping...")
+                    continue
+
+                for page in tqdm(range(num_pages), desc="Page"):
+                    results.append(reader.pages[page].extract_text())
+
+        except FileNotFoundError:
+            print(f"File not found: {uploaded_file}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+    return results

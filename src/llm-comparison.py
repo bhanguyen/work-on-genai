@@ -26,6 +26,7 @@ from applications.qa_bot.modules.vectorstore import (
     get_llama_index_retriever, 
     process_documents
 )
+# from applications.qa_bot.modules.process_documents import extract_text_from_pdf
 from vector_visual import main
 
 # Load environment variables
@@ -116,7 +117,7 @@ with st.sidebar:
 
 # Define model categories and models
 model_categories = {
-"Ollama": ["phi3", "llama3", "mistral", "gemma2"],
+"Ollama": ["phi3", "llama3.1", "mistral", "gemma2"],
 "Anthropic": ["claude-3-haiku-20240307", "claude-3-sonnet-20240229", "claude-3-5-sonnet-20240620"],
 "OpenAI": ["gpt-4o-mini", "gpt-3.5-turbo"]
 }

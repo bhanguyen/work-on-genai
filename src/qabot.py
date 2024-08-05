@@ -6,11 +6,14 @@ import traceback
 from langchain_community.vectorstores.pgvector import PGVector
 
 from applications.qa_bot.modules.process_documents import get_pdf_text, get_text_chunks
-from applications.qa_bot.modules.vectorstore import get_vectorstore
+from applications.qa_bot.modules.vectorstore import (
+    get_vectorstore,
+    get_llama_index_vector_store,
+    get_llama_index_retriever
+)
 from applications.qa_bot.modules.rag import get_conversation_chain, get_rag_chain
 from applications.qa_bot.htmlTemplates import css, bot_template, user_template
 
-# TODO: Add a function to handle user input
 def handle_userinput(user_question):
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
@@ -48,7 +51,7 @@ def initialize_session_state(vectorstore, model_type, model):
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
-# TODO: Create a streamlit app
+# Create a streamlit app
 def main():
     st.set_page_config(
         page_title="Streamlit Question Answering App",
@@ -78,20 +81,27 @@ def main():
 
         collection_name = st.text_input("Enter your collection name (Optional)")
         
-        # Updated model selection
-        model_type = st.selectbox('Select model type', ['OpenAI', 'Ollama', 'Anthropic'])
+        # Define model categories and models
+        model_categories = {
+            "Ollama": ["phi3", "llama3.1", "mistral", "gemma2"],
+            "Anthropic": ["claude-3-haiku-20240307", "claude-3-sonnet-20240229", "claude-3-5-sonnet-20240620"],
+            "OpenAI": ["gpt-4o-mini", "gpt-3.5-turbo"]
+        }
+
+        # Select model type
+        model_type = st.selectbox('Select model type', list(model_categories.keys()))
+
+        # Display model options
+        if model_type:
+            model = st.selectbox(f"Select {model_type} model:", model_categories[model_type])
 
         # Set up API keys
         openai_api_key = os.getenv("OPENAI_API_KEY")
         anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
         if model_type == 'OpenAI':
-            model = 'gpt-3.5-turbo'
             if not openai_api_key:
                 st.sidebar.error("OpenAI API key is not set. Please set the OPENAI_API_KEY environment variable.")
-        elif model_type == 'Ollama':
-            model = st.selectbox('Select Ollama model', ['phi3', 'llama3', 'mistral'])
         elif model_type == 'Anthropic':
-            model = 'claude-3-sonnet-20240229'
             if not anthropic_api_key:
                 st.sidebar.error("Anthropic API key is not set. Please set the ANTHROPIC_API_KEY environment variable.")
         
@@ -115,6 +125,7 @@ def main():
                         CONNECTION_STRING, 
                         collection_name
                     )
+                    # vectorstore = get_llama_index_vector_store()
                     # Initialize conversation based on memory choice
                     st.session_state.conversation = get_conversation_chain(vectorstore, model_type, model)
                     st.success('PDF uploaded successfully!', icon="✅")
@@ -128,6 +139,7 @@ def main():
     user_question = st.chat_input(placeholder="Ask me something")
     # Select chat model
     vectorstore = get_vectorstore(None, CONNECTION_STRING)
+    # vectorstore = get_llama_index_vector_store()
     try:
         initialize_session_state(vectorstore, model_type, model)
     except Exception as e:
@@ -139,16 +151,16 @@ def main():
             st.warning('Missing Anthropic API key')
         st.error(f"Error: {str(e)}")
 
-
     # If the user enters a question, it calls the handle_userinput() function to process the user's input.
     if user_question:
-        with st.spinner("Processing..."):
+        with st.spinner("Thinking..."):
             handle_userinput(user_question)
         with st.expander("See retrieved documents"):
             retriever = vectorstore.as_retriever(
                 search_type="similarity",
                 search_kwargs={"k": 3, "include_metadata": True}
             )
+            # retriever = get_llama_index_retriever()
             docs = retriever.invoke(user_question)
             st.write(docs)
             # docs = vectorstore.similarity_search(user_question, k=2)

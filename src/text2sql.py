@@ -10,7 +10,7 @@ from langchain.agents import AgentExecutor
 
 # Import custom modules
 from applications.text_to_sql.utils import connect_to_db, get_tables, load_table
-from applications.text_to_sql.get_sql_answer import get_chain, get_agent, get_llm
+from applications.text_to_sql.get_sql import get_chain, get_agent, get_llm
 
 # Load environment variables
 load_dotenv()
@@ -46,11 +46,16 @@ def main():
         )
 
         st.markdown("### Configuration:")
-        
+        st.write("Configure your database connection")
         # Database connection setup
-        database = st.sidebar.text_input('Enter your database name', '')
-        CONNECTION_STRING = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{database}"
-        
+        with st.expander("Database Configuration"):
+            USER = st.text_input('Enter your username', '', placeholder="Username")
+            PASSWORD = st.text_input('Enter your password', '', placeholder="Password", type="password")
+            HOST =  st.text_input('Enter your host', '', placeholder="Host")
+            PORT = st.text_input('Enter your port', '', placeholder="Port")
+            database = st.text_input('Enter your database name', '', placeholder="Database name")
+            CONNECTION_STRING = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{database}"
+
         # Attempt to connect to the database and get table information
         try:
             conn = connect_to_db(database)
@@ -59,44 +64,54 @@ def main():
         except Exception as e:
             st.warning('Please enter the correct database name')
             st.error(f"Error: {e}")
+    
+    # Table preview
+    if selected_tables:
+        tabs = st.tabs(selected_tables)
+        for i, tab in enumerate(tabs):
+            with tab:
+                table = selected_tables[i]
+                st.subheader(f"Preview of {table}")
+                try:
+                    df = load_table(table, conn)
+                    st.dataframe(df.head(), hide_index=True)
+                except Exception as e:
+                    st.error(f"Error loading table {table}: {e}")
+
+    with st.sidebar:
+        st.subheader("Application Configuration")
+        # Table selection
+        use_table = st.sidebar.toggle("Use Tables")
+        st.sidebar.warning("""Select to use the preview tables for generating SQL query.
+                If left unchecked, all tables will be used.""")
+        
+        if use_table:
+            selected_tables = selected_tables
+        else:
+            selected_tables = all_tables
         
         # LLM selection
         llm_options = ['OpenAI', 'Anthropic', 'Ollama']
         selected_llms = st.multiselect("Select LLMs", llm_options, default=['Ollama'])
         
-        # Create columns based on selected LLMs
-        # llm_cols = st.columns(len(selected_llms))
-        
         # Model selection for each LLM
         selected_models = {}
         for i, llm in enumerate(selected_llms):
-            # with llm_cols[i]:
-                st.subheader(llm)
-                if llm == 'Ollama':
-                    model_options = ['phi3', 'llama3', 'mistral']
-                    selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
-                elif llm == 'OpenAI':
-                    model_options = ['gpt-3.5-turbo', 'gpt-4']
-                    selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
-                elif llm == 'Anthropic':
-                    model_options = ['claude-3-5-sonnet-20240620', 'claude-3-haiku-20240307']
-                    selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
+            st.subheader(llm)
+            if llm == 'Ollama':
+                model_options = ['phi3', 'llama3.1', 'mistral', 'mistral-nemo','gemma2']
+                selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
+            elif llm == 'OpenAI':
+                model_options = ['gpt-3.5-turbo', 'gpt-4o-mini']
+                selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
+            elif llm == 'Anthropic':
+                model_options = ['claude-3-5-sonnet-20240620', 'claude-3-haiku-20240307']
+                selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
 
         # Agent configuration
-        use_agent = st.checkbox("Use Agent")
+        use_agent = st.toggle("Use Agent")
         st.info("""The agent calls a set of tools to process your plain English inputs, 
                 transforming them into precise SQL queries and executing them seamlessly.""")
-
-    # Main content area
-    # Table preview
-    if selected_tables:
-        for table in selected_tables:
-            st.subheader(f"Preview of {table}")
-            try:
-                df = load_table(table, conn)
-                st.dataframe(df.head(), hide_index=True)
-            except Exception as e:
-                st.error(f"Error loading table {table}: {e}")
 
     # User input for question
     question = st.text_input("Ask Question: ")
@@ -108,11 +123,11 @@ def main():
         st.write(f"Debug: Selected Models - {selected_models}")
         if question and selected_tables and selected_models:
             # Create tabs for each selected LLM
-            # tabs = st.tabs(selected_models.keys())
-            cols = st.columns(len(selected_models.keys()))
+            tabs = st.tabs(selected_models.keys())
+            # cols = st.columns(len(selected_models.keys()))
             
-            for col, (llm_name, model) in zip(cols, selected_models.items()):
-                with col:
+            for tab, (llm_name, model) in zip(tabs, selected_models.items()):
+                with tab:
                     # Initialize LLM
                     llm = get_llm(llm_name, model)
 
@@ -159,9 +174,10 @@ def main():
                         
                         # Assign agent type based on LLM
                         if llm_name == 'OpenAI':
-                            agent_type = 'openai-tools'
+                            agent_type = 'tool-calling'
                         else:  # For Ollama and Anthropic
                             agent_type = 'zero-shot-react-description'
+                            # agent_type = 'openai-tools'
                         
                         # Create agent executor
                         agent_executor = get_agent(CONNECTION_STRING, agent_type, selected_tables, llm)
@@ -172,7 +188,7 @@ def main():
                                         result = agent_executor(question, callbacks=[st_cb])
                                     else:
                                         result = agent_executor({"input": question}, callbacks=[st_cb])
-                                
+                                st.write(result["output"])
                                 # Extract and display the SQL query
                                 # Locate the final query
                                 action = result["intermediate_steps"][-1]
@@ -184,9 +200,9 @@ def main():
                                 # Find the SELECT part in the tool_input if it's a string
                                 if isinstance(tool_input, str) and tool_input.strip().upper().startswith('SELECT'):
                                     final_query = tool_input.strip()
-
+                                
                                 if final_query:
-                                    st.subheader("Final Executed SELECT Query")
+                                    st.subheader("Final Executed Query")
                                     st.code(final_query, language='sql')
                                 else:
                                     st.info("""No SELECT query was found in the agent's output. 

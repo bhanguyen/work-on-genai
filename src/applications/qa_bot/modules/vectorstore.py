@@ -1,10 +1,8 @@
 import os
-from langchain_community.vectorstores.pgvector import PGVector
-
+from langchain_community.vectorstores import PGVector
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
 
-# TODO: Add a function to create a vector store, and create embeddings
 def get_vectorstore(text_chunks, CONNECTION_STRING, collection_name=None):
     """
     Creates a PGVector object with embeddings generated using the OpenAI API.
@@ -58,12 +56,12 @@ def get_vectorstore(text_chunks, CONNECTION_STRING, collection_name=None):
 ########## LLAMA-INDEX ##############
 import logging
 from typing import List
-
+import os
 import streamlit as st
 from sqlalchemy import create_engine
 from sqlalchemy.pool import QueuePool
 
-from llama_index.core import Document, SimpleDirectoryReader, StorageContext, VectorStoreIndex
+from llama_index.core import Document, SimpleDirectoryReader, StorageContext, VectorStoreIndex, Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.vector_stores.postgres import PGVectorStore
@@ -85,7 +83,10 @@ def get_llama_index_embeddings() -> HuggingFaceEmbedding:
     Returns:
         HuggingFaceEmbedding: The embedding model.
     """
-    return HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
+    embed_model = HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
+    Settings.embed_model = embed_model
+
+    return embed_model
 
 @st.cache_resource
 def get_llama_index_vector_store() -> PGVectorStore:
@@ -95,12 +96,11 @@ def get_llama_index_vector_store() -> PGVectorStore:
     Returns:
         PGVectorStore: The vector store.
     """
-    # engine = get_db_engine()
     return PGVectorStore.from_params(
                         user = os.environ.get("PGVECTOR_USER"),                                      
                         password = os.environ.get("PGVECTOR_PASSWORD"),                                  
                         host = os.environ.get("PGVECTOR_HOST"),                                            
-                        port = os.environ.get("PGVECTOR_PORT"),                                          
+                        port = 5432,                                          
                         database = os.environ.get("PGVECTOR_DATABASE"),
                         embed_dim=768
                         )

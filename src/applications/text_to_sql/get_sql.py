@@ -4,7 +4,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatOllama
 
 from langchain_community.utilities import SQLDatabase
-from langchain_experimental.sql import SQLDatabaseChain, SQLDatabaseSequentialChain
+from langchain_experimental.sql import SQLDatabaseChain
 from langchain.prompts import PromptTemplate
 from langchain_community.agent_toolkits import create_sql_agent
 from langchain.agents import AgentType, AgentExecutor
@@ -213,6 +213,7 @@ def get_agent(connection_string, agent_type, table, llm):
             toolkit=toolkit,
             agent_type=agent_type,
             prefix=SQL_PREFIX,
+            max_iterations=20,
             verbose=True,
             handle_parsing_errors=True,
             agent_executor_kwargs={
