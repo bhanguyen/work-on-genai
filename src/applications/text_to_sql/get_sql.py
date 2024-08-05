@@ -16,7 +16,26 @@ from typing import Union, Dict, Any
 import re
 
 class FlexibleOutputParser(AgentOutputParser):
+    """
+    A flexible output parser that can interpret the output of an agent.
+    
+    This parser can detect "Final Answer" responses, interpret thought-action patterns,
+    and handle unclear output by requesting clarification.
+    """
+
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
+        """
+        Parse the given text to determine the agent's response.
+        
+        This method identifies whether the text contains a final answer, a thought-action pattern,
+        or an unclear output, and returns the appropriate response object.
+        
+        Args:
+            text (str): The text output from the agent to be parsed.
+        
+        Returns:
+            Union[AgentAction, AgentFinish]: An AgentAction or AgentFinish object based on the parsed text.
+        """
         if "Final Answer:" in text:
             return AgentFinish(
                 return_values={"output": text.split("Final Answer:")[-1].strip()},
