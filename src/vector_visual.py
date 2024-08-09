@@ -2,7 +2,7 @@ import json
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+import plotly.graph_objects as go
 from sklearn.decomposition import PCA
 import psycopg2
 from sentence_transformers import SentenceTransformer
@@ -80,18 +80,47 @@ def plot_embeddings_2d(embeddings, query_embedding):
     plt.title('Embedding Vectors Visualization (2D)')
     st.pyplot(plt.gcf())
 
-# Function to plot 3D embeddings
 def plot_embeddings_3d(embeddings, query_embedding):
-    fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(embeddings[:, 0], embeddings[:, 1], embeddings[:, 2], c='blue', label='Context Embeddings')
-    ax.scatter(query_embedding[0], query_embedding[1], query_embedding[2], c='red', label='Query Embedding', marker='x', s=200)
-    ax.set_xlabel('Component 1')
-    ax.set_ylabel('Component 2')
-    ax.set_zlabel('Component 3')
-    ax.legend()
-    plt.title('Embedding Vectors Visualization (3D)')
-    st.pyplot(fig)
+
+    fig = go.Figure()
+
+    # Plot context embeddings
+    fig.add_trace(go.Scatter3d(
+        x=embeddings[:, 0],
+        y=embeddings[:, 1],
+        z=embeddings[:, 2],
+        mode='markers',
+        marker=dict(color='blue', size=6),
+        name='Context Embeddings'
+    ))
+
+    # Plot query embedding
+    fig.add_trace(go.Scatter3d(
+        x=[query_embedding[0]],
+        y=[query_embedding[1]],
+        z=[query_embedding[2]],
+        mode='markers',
+        marker=dict(color='red', size=4, symbol='x'),
+        name='Query Embedding'
+    ))
+
+    fig.update_layout(
+        title='Embedding Vectors Visualization (3D)',
+        scene=dict(
+            xaxis_title='PCA1',
+            yaxis_title='PCA2',
+            zaxis_title='PCA3',
+            xaxis=dict(showgrid=True, gridcolor='gray'),
+            yaxis=dict(showgrid=True, gridcolor='gray'),
+            zaxis=dict(showgrid=True, gridcolor='gray')
+        ),
+        legend_title='Legend',
+        showlegend=False,
+        width=800,
+        height=700,
+    )
+
+    st.plotly_chart(fig)
 
 def main(context_node_ids, question):
     st.title("Embedding Vectors Visualization")
@@ -119,11 +148,12 @@ def main(context_node_ids, question):
         st.error(f"The dimension of the query embedding {query_embedding.shape[0]} does not match the context embeddings {context_embeddings.shape[1]}.")
         return
 
-    # Option to select visualization type
-    visualization_type = st.selectbox("Select visualization type", ("2D", "3D"))
+    # # Option to select visualization type
+    # visualization_type = st.selectbox("Select visualization type", ("2D", "3D"))
 
-    # Set number of components based on visualization type
-    n_components = 2 if visualization_type == "2D" else 3
+    # # Set number of components based on visualization type
+    # n_components = 2 if visualization_type == "2D" else 3
+    n_components = 3
 
     # Reduce dimensionality of context embeddings
     reduced_context_embeddings, pca = reduce_dimensionality(context_embeddings, n_components=n_components)
@@ -136,10 +166,11 @@ def main(context_node_ids, question):
     st.write(reduced_query_embedding)
 
     # Plot embeddings based on selected visualization type
-    if visualization_type == "2D":
-        plot_embeddings_2d(reduced_context_embeddings, reduced_query_embedding)
-    else:
-        plot_embeddings_3d(reduced_context_embeddings, reduced_query_embedding)
+    # if visualization_type == "2D":
+    #     plot_embeddings_2d(reduced_context_embeddings, reduced_query_embedding)
+    # else:
+    #     plot_embeddings_3d(reduced_context_embeddings, reduced_query_embedding)
+    plot_embeddings_3d(reduced_context_embeddings, reduced_query_embedding)
 
 if __name__ == "__main__":
 

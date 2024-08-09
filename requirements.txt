@@ -1,10 +1,11 @@
 streamlit
 pandas
-# psycopg2
+psycopg2
 psycopg2-binary
 python-dotenv
 seaborn
 matplotlib
+plotly
 ipykernel
 python-dotenv
 numpy

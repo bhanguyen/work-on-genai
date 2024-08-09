@@ -75,18 +75,21 @@ def get_llama_index_reader(pdf_docs) -> List[Document]:
     reader = SimpleDirectoryReader(pdf_docs)
     return reader.load_data(show_progress=True)
 
-@st.cache_resource
-def get_llama_index_embeddings() -> HuggingFaceEmbedding:
-    """
-    Get or create a cached HuggingFace embedding model.
+# @st.cache_resource
+# def get_llama_index_embeddings() -> HuggingFaceEmbedding:
+#     """
+#     Get or create a cached HuggingFace embedding model.
     
-    Returns:
-        HuggingFaceEmbedding: The embedding model.
-    """
-    embed_model = HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
-    Settings.embed_model = embed_model
+#     Returns:
+#         HuggingFaceEmbedding: The embedding model.
+#     """
+#     embed_model = HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
+#     Settings.embed_model = embed_model
 
-    return embed_model
+#     return embed_model
+
+embed_model = HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
+Settings.embed_model = embed_model
 
 @st.cache_resource
 def get_llama_index_vector_store() -> PGVectorStore:
@@ -123,7 +126,8 @@ def process_documents(documents: List[Document]) -> PGVectorStore:
     text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=20)
     title_extractor = TitleExtractor(nodes=5)
     qa_extractor = QuestionsAnsweredExtractor(questions=5)
-    embed_model = get_llama_index_embeddings()
+    embed_model = HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
+    # embed_model = get_llama_index_embeddings()
     vector_store = get_llama_index_vector_store()
     docstore = SimpleDocumentStore()
     
@@ -182,7 +186,8 @@ def get_llama_index_vectorstore_index() -> VectorStoreIndex:
     index = VectorStoreIndex.from_vector_store(
         vector_store=vector_store,
         storage_context=storage_context,
-        embed_model=get_llama_index_embeddings(),
+        embed_model=HuggingFaceEmbedding("sentence-transformers/all-mpnet-base-v2")
+        # embed_model=get_llama_index_embeddings(),
     )
     return index
 
@@ -207,6 +212,7 @@ def get_llama_index_retriever() -> VectorIndexRetriever:
     retriever = VectorIndexRetriever(
         index=index,
         similarity_top_k=5,  # Retrieve top 5 similar results
-        node_postprocessors=[reranker]  # Apply reranking to top 3
+        node_postprocessors=[reranker],  # Apply reranking to top 3
+        verbose=True
     )
     return retriever
