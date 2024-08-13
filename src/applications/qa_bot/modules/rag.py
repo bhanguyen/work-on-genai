@@ -4,7 +4,9 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain_community.chat_models import ChatOllama, ChatOpenAI, ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
+from langchain_community.chat_models import ChatOllama
 
 import streamlit as st
 
@@ -71,15 +73,21 @@ def init_chat_model(model_type: str, model: str):
             # Initialize OpenAI chat model
             llm = ChatOpenAI(
                 model_name=model,
+                verbose=True,
                 temperature=0,  # Set to 0 for more deterministic outputs
             )
         elif model_type == 'Ollama':
             # Initialize Ollama chat model
-            llm = ChatOllama(model=model)
+            llm = ChatOllama(
+                model=model,
+                verbose=True,
+                temperature=0,  # Set to 0 for more deterministic outputs
+            )
         elif model_type == 'Anthropic':
             # Initialize Anthropic (Claude) chat model
             llm = ChatAnthropic(
                 model=model,
+                verbose=True,
                 temperature=0,  # Set to 0 for more deterministic outputs
             )
         else:
