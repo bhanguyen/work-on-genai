@@ -19,6 +19,8 @@ from src.applications.qa_bot.modules.vectorstore import (
     process_documents
 )
 
+from src.applications.qa_bot.htmlTemplates import css, bot_template, user_template
+
 load_dotenv()
 
 # Set up logging configuration
@@ -314,8 +316,8 @@ def get_llm_response(
         return "I apologize, but I encountered an error while generating a response. Could you please try asking your question again?"
 
 def main():
-    # st.set_page_config(page_title="Knowledge Assistant Chatbot")
-    st.title("Knowledge Assistant Chatbot")
+    st.set_page_config(page_title="Knowledge Assistant Chatbot")
+    st.title("GenAI Powered Knowledge Assistant Chatbot :books::llama::parrot:")
 
     # Sidebar for document upload and processing
     with st.sidebar:
@@ -375,17 +377,10 @@ def main():
         st.session_state.previous_model_type = model_type
         st.session_state.previous_model = model
 
-    # Clear previous chat messages
-    for key in st.session_state.keys():
-        if key.startswith('message_'):
-            del st.session_state[key]
-
     # Display chat history
     for i, message in enumerate(st.session_state.conversation_manager.get_chat_history()):
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-        # Store the message in session state to prevent re-running
-        # st.session_state[f'message_{i}'] = message["content"]
+            st.write(message["content"])
 
     # Get user input and process response
     if question := st.chat_input("Enter your message:"):
@@ -414,7 +409,7 @@ def main():
                 except Exception as e:
                     st.error(f"An error occurred: {str(e)}")
                     logging.error(f"Error in processing query: {e}", exc_info=True)
-
+        st.rerun()
     # Clear chat button
     if st.button("Clear chat"):
         st.session_state.conversation_manager = initialize_conversation(model_type, model)
