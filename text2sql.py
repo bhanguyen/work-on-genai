@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import pandas as pd
-import sys
+import re
 
 # Import langchain modules
 from langchain_community.callbacks import StreamlitCallbackHandler
@@ -37,46 +37,51 @@ def main():
         st.markdown(
             """
             ### Instructions:
-            1. Select tables to use
-            2. Choose Language Model(s)
-            3. Ask a question
-            4. Select `Use Agent` (Optional)
-            5. Enter or Press 'Get Answer'
+            1. Configure database connection.
+            2. Select the tables to use in the sidebar.
+            3. Choose the Language Model(s) in the sidebar.
+            4. Ask a question about the data in the selected tables.
+            5. Press 'Get Answer' to generate the SQL query.
             """
         )
 
         st.markdown("### Configuration:")
         st.write("Configure your database connection")
         # Database connection setup
-        with st.expander("Database Configuration"):
-            USER = st.text_input('Enter your username', '', placeholder="Username")
-            PASSWORD = st.text_input('Enter your password', '', placeholder="Password", type="password")
-            HOST =  st.text_input('Enter your host', '', placeholder="Host")
-            PORT = st.text_input('Enter your port', '', placeholder="Port")
-            database = st.text_input('Enter your database name', '', placeholder="Database name")
-            CONNECTION_STRING = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{database}"
+        # with st.expander("Database Configuration"):
+        with st.popover("Database Configuration"):
+            st.write("Enter connection details")
+            USER = st.text_input('Username', '', placeholder="Username")
+            PASSWORD = st.text_input('Password', '', placeholder="Password", type="password")
+            HOST =  st.text_input('Host', '', placeholder="Host")
+            PORT = st.text_input('Port', '', placeholder="Port")
+            DATABASE = st.text_input('Database', '', placeholder="Database")
+            CONNECTION_STRING = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
 
         # Attempt to connect to the database and get table information
         try:
-            conn = connect_to_db(database)
+            conn = connect_to_db(USER, PASSWORD, HOST, PORT, DATABASE)
             all_tables = get_tables(conn)
-            selected_tables = st.multiselect("Select tables to use", all_tables, default=all_tables[0] if all_tables else None)
+            selected_tables = st.multiselect("Select tables to use", all_tables, default=None)  # all_tables[0] if all_tables else None)
         except Exception as e:
             st.warning('Please enter the correct database name')
             st.error(f"Error: {e}")
     
     # Table preview
-    if selected_tables:
-        tabs = st.tabs(selected_tables)
-        for i, tab in enumerate(tabs):
-            with tab:
-                table = selected_tables[i]
-                st.subheader(f"Preview of {table}")
-                try:
-                    df = load_table(table, conn)
-                    st.dataframe(df.head(), hide_index=True)
-                except Exception as e:
-                    st.error(f"Error loading table {table}: {e}")
+    try:
+        if selected_tables:
+            tabs = st.tabs(selected_tables)
+            for i, tab in enumerate(tabs):
+                with tab:
+                    table = selected_tables[i]
+                    st.subheader(f"Preview of {table}")
+                    try:
+                        df = load_table(table, CONNECTION_STRING)
+                        st.dataframe(df.head(), hide_index=True)
+                    except Exception as e:
+                        st.error(f"Error loading table {table}: {e}")
+    except:
+        st.error("Database need to be configured")
 
     with st.sidebar:
         st.subheader("Application Configuration")
@@ -84,9 +89,11 @@ def main():
         use_table = st.sidebar.toggle("Use Tables")
         st.sidebar.warning("""Select to use the preview tables for generating SQL query.
                 If left unchecked, all tables will be used.""")
-        
         if use_table:
-            selected_tables = selected_tables
+            try:
+                selected_tables = selected_tables
+            except:
+                st.error("Please select tables")
         else:
             selected_tables = all_tables
         
@@ -99,7 +106,7 @@ def main():
         for i, llm in enumerate(selected_llms):
             st.subheader(llm)
             if llm == 'Ollama':
-                model_options = ['phi3', 'llama3.1', 'mistral', 'mistral-nemo','gemma2']
+                model_options = ['llama3.1', 'gemma2', 'phi3']
                 selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
             elif llm == 'OpenAI':
                 model_options = ['gpt-3.5-turbo', 'gpt-4o-mini']
@@ -109,7 +116,7 @@ def main():
                 selected_models[llm] = st.selectbox(f"Select {llm} model", model_options)
 
         # Agent configuration
-        use_agent = st.toggle("Use Agent")
+        use_agent = st.toggle("Use Agent", value=True)
         st.info("""The agent calls a set of tools to process your plain English inputs, 
                 transforming them into precise SQL queries and executing them seamlessly.""")
 
@@ -118,7 +125,7 @@ def main():
 
     # Get Answer button
     if st.button("Get Answer", key='get_answer'):
-        st.write(f"Debug: Question - {question}")
+        # st.write(f"Debug: Question - {question}")
         st.write(f"Debug: Selected Tables - {selected_tables}")
         st.write(f"Debug: Selected Models - {selected_models}")
         if question and selected_tables and selected_models:
@@ -142,27 +149,33 @@ def main():
                             response = chain.invoke(question)
 
                         with answer_tab:
-                            st.success(response['result'])
-                            final_query = response['intermediate_steps'][1]
-                            # final_query = response['result']
-                            st.subheader("Executed SQL")
-                            st.code(final_query, language='sql')
-                            
-                            # if st.button("Execute SQL", key='execute_sql'):
-                            # st.subheader("Result Table")
-                            # try:
-                            #     with st.spinner("Executing query..."):
-                            #         result = pd.read_sql_query(final_query, conn)
-                            #     st.success("Query executed successfully.")
-                            #     st.dataframe(result, hide_index=True)
-                            # finally:
-                            #     if conn is not None:
-                            #         conn.close()
-                            #         st.info("Database connection closed.")
-                        
-                        with logs_tab:
-                            st.subheader("Chain logs")
-                            st.json(response)
+                            # st.write(response['result'])
+                            # final_query = response['intermediate_steps'][1]
+                            # st.subheader("Executed SQL")
+                            final_query = response['result']
+                            # if llm == "OpenAI":
+                            # st.code(final_query, language='sql')
+                            st.markdown(final_query)
+
+                            # sql_query = st.text_input("Enter SQL query:")
+                        # if st.button("Execute SQL", key='execute_sql', type='secondary'):
+                        #     st.subheader("Result Table")
+                        #     try:
+                        #         with st.spinner("Executing query..."):
+                        #             result = pd.read_sql_query(final_query, conn)
+                        #         st.success("Query executed successfully.")
+                        #         st.dataframe(result, hide_index=True)
+                        #     except Exception as e:
+                        #         st.error(f"An error occurred: {str(e)}")
+                        #     finally:
+                        #         if conn is not None:
+                        #             conn.close()
+                        #             st.info("Database connection closed.")
+
+                            with logs_tab:
+                                st.subheader("Chain logs")
+                                st.json(response)
+
                     
                     else:
                         # Using agent for more complex queries
@@ -177,7 +190,8 @@ def main():
                             agent_type = 'tool-calling'
                         else:  # For Ollama and Anthropic
                             agent_type = 'zero-shot-react-description'
-                            # agent_type = 'openai-tools'
+                            # agent_type = 'tool-calling'
+                            # agent_type = 'openai-functions'
                         
                         # Create agent executor
                         agent_executor = get_agent(CONNECTION_STRING, agent_type, selected_tables, llm)
@@ -210,8 +224,8 @@ def main():
                                 
                             except Exception as e:
                                 st.error(f"An error occurred: {str(e)}")
-                                st.error("Agent Trace:")
-                                st.json(vars(agent_executor))  # This will show the full agent trace
+                                # st.error("Agent Trace:")
+                                # st.json(vars(agent_executor))  # This will show the full agent trace
                         else:
                             st.error("Failed to create the agent. Please check your configuration.")
         else:
