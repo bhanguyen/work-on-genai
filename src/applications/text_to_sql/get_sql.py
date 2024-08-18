@@ -267,7 +267,7 @@ def get_agent(connection_string, agent_type, table, llm):
             agent_type=agent_type,
             prefix=SQL_PREFIX,
             # prompt=prompt,
-            max_iterations=15,
+            # max_iterations=15,
             verbose=True,
             handle_parsing_errors=True,
             agent_executor_kwargs={
