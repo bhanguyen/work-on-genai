@@ -147,13 +147,15 @@ def get_chain(connection_string, table, llm):
     """
     
     custom_prompt = PromptTemplate(
-        input_variables=["input", "table_info", "top_k"],
+        input_variables=["input", "table_info"],
         template="""
         Given an input question, first create a syntactically correct {dialect} query to run, then return the query.
+        DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
+        Never query for all the columns from a specific table, only ask for the relevant columns given the question.
         Use the following format:
 
         Question: "Question here"
-        SQLQuery: SQL Query to run
+        SQLQuery: ```sql\nSQL Query to run\n```
 
         Only use the following tables:
         {table_info}
@@ -169,9 +171,10 @@ def get_chain(connection_string, table, llm):
         db=db,
         prompt=custom_prompt,
         verbose=True,  # For detailed output
-        # return_sql=True,
-        return_intermediate_steps=True,  # To see intermediate steps
-        use_query_checker=False,  # To check and potentially correct SQL queries
+        return_sql=True,
+        # return_intermediate_steps=True,  # To see intermediate steps
+        # return_direct=True, # To return the result directly
+        use_query_checker=True,  # To check and potentially correct SQL queries
     )
 
 def get_agent(connection_string, agent_type, table, llm):
@@ -218,11 +221,42 @@ def get_agent(connection_string, agent_type, table, llm):
     ALWAYS, as part of your final answer, explain how you got to the answer on a section that starts with: 
     "Explanation:". Include the SQL query as part of the explanation section.
 
+    Use the following format:
+
+    Question: the input question you must answer
+    Thought: you should always think about what to do
+    Action: the action to take, should be one of Tools
+    Action Input: the input to the action
+    Observation: the result of the action
+    ... (this Thought/Action/Action Input/Observation can repeat N times)
+    Thought: I now know the final answer
+    Final Answer: the final answer to the original input question. 
+
     Only use the below tools. Only use the information returned by the below tools to construct your query and final answer.
     DO NOT make up table names, only use the tables returned by any of the tools below.
 
     ## Tools: 
     """
+
+    template = """Answer the following questions as best you can. Use the following format:
+
+    Question: the input question you must answer
+    Thought: you should always think about what to do
+    Action: the action to take, should be one of Tools
+    Action Input: the input to the action
+    Observation: the result of the action
+    ... (this Thought/Action/Action Input/Observation can repeat N times)
+    Thought: I now know the final answer
+    Final Answer: the final answer to the original input question
+
+    Begin!
+
+    Question: {input}
+    Thought:{agent_scratchpad}
+    """
+
+    prompt = PromptTemplate.from_template(template)
+
     db = get_db(connection_string, table)
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
 
@@ -232,7 +266,8 @@ def get_agent(connection_string, agent_type, table, llm):
             toolkit=toolkit,
             agent_type=agent_type,
             prefix=SQL_PREFIX,
-            max_iterations=20,
+            # prompt=prompt,
+            # max_iterations=15,
             verbose=True,
             handle_parsing_errors=True,
             agent_executor_kwargs={

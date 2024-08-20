@@ -5,20 +5,20 @@ import pandas as pd
 from sqlalchemy import create_engine
 
 load_dotenv()
-# TODO: Function to connect to database
+# Function to connect to database
 # Set up the connection to PostgreSQL
-def connect_to_db(database):
-    conn = psycopg2.connect(
-        user = os.environ.get("DB_USER"),                                     
-        password = os.environ.get("DB_PASSWORD"),                                  
-        host = os.environ.get("DB_HOST"),                                            
-        port = os.environ.get("DB_PORT"),                                          
-        database = database  #os.environ.get("DATABASE")
-    )
+def connect_to_db(user, password, host, port, database):
+    db_param = {
+        "user": user,                                     
+        "password": password,                                  
+        "host": host,                                            
+        "port": port,                                          
+        "database": database
+    }
 
-    return conn
+    return psycopg2.connect(**db_param)
 
-# TODO: Function to get tables 
+# Function to get tables 
 def get_tables(conn):
     query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
     with conn.cursor() as cur:
