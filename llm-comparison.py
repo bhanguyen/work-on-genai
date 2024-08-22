@@ -29,6 +29,9 @@ from src.applications.qa_bot.modules.vectorstore import (
 # from applications.qa_bot.modules.process_documents import extract_text_from_pdf
 from src.vector_visual import main
 
+# Set Streamlit page
+st.set_page_config(layout='wide')
+
 # Load environment variables
 load_dotenv()
 
@@ -117,9 +120,9 @@ with st.sidebar:
 
 # Define model categories and models
 model_categories = {
-"Ollama": ["phi3", "llama3.1", "mistral", "gemma2"],
-"Anthropic": ["claude-3-haiku-20240307", "claude-3-sonnet-20240229", "claude-3-5-sonnet-20240620"],
-"OpenAI": ["gpt-4o-mini", "gpt-3.5-turbo"]
+"OpenAI": ["gpt-4o-mini", "gpt-3.5-turbo"],
+"Anthropic": ["claude-3-5-sonnet-20240620", "claude-3-haiku-20240307"],
+"Ollama": ["phi3", "llama3.1", "gemma2"]
 }
 
 with st.sidebar:
@@ -162,25 +165,32 @@ DATABASE = os.environ.get("PGVECTOR_DATABASE")
 # Main input area for user prompt
 user_prompt = st.text_input("Enter your prompt:", placeholder="Your query")
 
-with st.expander("Check Query Embedding"):
+if not user_prompt:
+    st.write("Please enter a question to proceed")
+else:
+    try:
 
-    # Database connection details
-    CONNECTION_STRING = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
+        with st.popover("Check Query Embedding"):
 
-    # Create an engine
-    engine = create_engine(CONNECTION_STRING)
+            # Database connection details
+            CONNECTION_STRING = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
 
-    # Define the query
-    query = "SELECT node_id FROM data_llamaindex;"
+            # Create an engine
+            engine = create_engine(CONNECTION_STRING)
 
-    # Connect to the database and execute the query
-    with engine.connect() as connection:
-        result = connection.execute(text(query))
-        context_node_ids = [row[0] for row in result.fetchall()]
+            # Define the query
+            query = "SELECT node_id FROM data_llamaindex;"
 
-    # Print the populated list
-    print(context_node_ids)
-    main(context_node_ids, user_prompt)
+            # Connect to the database and execute the query
+            with engine.connect() as connection:
+                result = connection.execute(text(query))
+                context_node_ids = [row[0] for row in result.fetchall()]
+
+            # Print the populated list
+            print(context_node_ids)
+            main(context_node_ids, user_prompt)
+    except:
+        st.warning("Cannot find data connection. Make sure if configured correctly in the side panel")
 
 if st.button("Generate Responses", key="response"):
     if user_prompt:
@@ -199,10 +209,15 @@ if st.button("Generate Responses", key="response"):
                 st.write(doc.score)
         
         with tab3:
-            tabs = st.tabs(selected_models)
-            for i, tab in enumerate(tabs):
-                with tab:
+            cols = st.columns(len(selected_models))
+            for i, col in enumerate(cols):
+                with col:
+                    st.subheader(selected_models[i])
                     display_response(context, user_prompt, selected_models[i], temperature)
+            # tabs = st.tabs(selected_models)
+            # for i, tab in enumerate(tabs):
+            #     with tab:
+            #         display_response(context, user_prompt, selected_models[i], temperature)
     else:
         st.warning("Please enter a question.")
 
@@ -211,5 +226,5 @@ if not openai_api_key:
     st.sidebar.error("OpenAI API key is not set. Please set the OPENAI_API_KEY environment variable.")
 if not anthropic_api_key:
     st.sidebar.error("Anthropic API key is not set. Please set the ANTHROPIC_API_KEY environment variable.")
-if not CONNECTION_STRING:
-    st.sidebar.error("PostgreSQL connection string is not set. Please set the PG_CONNECTION_STRING environment variable.")
+# if not CONNECTION_STRING:
+#     st.sidebar.error("PostgreSQL connection string is not set. Please set the PG_CONNECTION_STRING environment variable.")
